@@ -1,0 +1,36 @@
+notifications:
+  email: false
+language: rust
+sudo: required
+rust:
+  - stable
+  - beta
+  - nightly
+addons:
+  apt:
+    packages:
+      - libssl-dev
+cache: cargo
+matrix:
+  allow_failures:
+    - rust: nightly
+before_cache: |
+  if [[ "$TRAVIS_RUST_VERSION" == nightly ]]; then
+    RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin
+  fi
+before_script:
+  - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]]; then
+      rustup component add clippy;
+    fi'
+script:
+  - RUSTFLAGS="-D warnings" cargo build --verbose
+  - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]]; then
+      cargo clippy --all -- -D warnings;
+    fi'
+  - cargo test --verbose
+  - cargo test --examples --verbose
+after_success: |
+  if [[ "$TRAVIS_RUST_VERSION" == nightly ]]; then
+    cargo tarpaulin --out Xml --no-default-features --features=filesystem,use_ndarray,gzip,lz_pure --run-types Doctests Tests
+    bash <(curl -s https://codecov.io/bash)
+  fi

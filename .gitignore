@@ -1,0 +1,6 @@
+*.sublime-*
+/target
+**/*.rs.bk
+Cargo.lock
+benches/*.tif
+tmp.n5
