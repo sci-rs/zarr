@@ -32,11 +32,14 @@ use crate::{
     DatasetAttributes,
     DefaultBlockReader,
     DefaultBlockWriter,
+    EntryPointMetadata,
     GridCoord,
+    Hierarchy,
     N5Lister,
     N5Reader,
     N5Writer,
     ReadableDataBlock,
+    ReadableStore,
     ReflectedType,
     ReinitDataBlock,
     VecDataBlock,
@@ -51,22 +54,42 @@ const ATTRIBUTES_FILE: &str = "attributes.json";
 #[derive(Clone, Debug)]
 pub struct N5Filesystem {
     base_path: PathBuf,
+    entry_point_metadata: EntryPointMetadata,
+}
+
+impl Hierarchy for N5Filesystem {
+    fn get_entry_point_metadata(&self) -> &EntryPointMetadata {
+        &self.entry_point_metadata
+    }
 }
 
 impl N5Filesystem {
+    fn read_entry_point_metadata<P: AsRef<std::path::Path>>(
+        base_path: P,
+    ) -> Result<EntryPointMetadata> {
+        // TODO
+        Ok(EntryPointMetadata {
+            metadata_key_suffix: ".json".to_owned(),
+        })
+    }
+
     /// Open an existing N5 container by path.
     pub fn open<P: AsRef<std::path::Path>>(base_path: P) -> Result<N5Filesystem> {
+        let base_path = PathBuf::from(base_path.as_ref());
+        let entry_point_metadata = Self::read_entry_point_metadata(&base_path)?;
+
         let reader = N5Filesystem {
-            base_path: PathBuf::from(base_path.as_ref()),
+            base_path,
+            entry_point_metadata,
         };
 
-        if reader.exists("")? {
-            let version = reader.get_version()?;
+        // if reader.exists("")? {
+        //     let version = reader.get_version()?;
 
-            if !is_version_compatible(&crate::VERSION, &version) {
-                return Err(Error::new(ErrorKind::Other, "TODO: Incompatible version"));
-            }
-        }
+        //     if !is_version_compatible(&crate::VERSION, &version) {
+        //         return Err(Error::new(ErrorKind::Other, "TODO: Incompatible version"));
+        //     }
+        // }
 
         Ok(reader)
     }
@@ -75,27 +98,28 @@ impl N5Filesystem {
     ///
     /// Note this will update the version attribute for existing containers.
     pub fn open_or_create<P: AsRef<std::path::Path>>(base_path: P) -> Result<N5Filesystem> {
-        let reader = N5Filesystem {
-            base_path: PathBuf::from(base_path.as_ref()),
-        };
+        todo!()
+        // let reader = N5Filesystem {
+        //     base_path: PathBuf::from(base_path.as_ref()),
+        // };
 
-        fs::create_dir_all(base_path)?;
+        // fs::create_dir_all(base_path)?;
 
-        if reader
-            .get_version()
-            .map(|v| !is_version_compatible(&crate::VERSION, &v))
-            .unwrap_or(false)
-        {
-            return Err(Error::new(ErrorKind::Other, "TODO: Incompatible version"));
-        } else {
-            reader.set_attribute(
-                "",
-                crate::VERSION_ATTRIBUTE_KEY.to_owned(),
-                crate::VERSION.to_string(),
-            )?;
-        }
+        // if reader
+        //     .get_version()
+        //     .map(|v| !is_version_compatible(&crate::VERSION, &v))
+        //     .unwrap_or(false)
+        // {
+        //     return Err(Error::new(ErrorKind::Other, "TODO: Incompatible version"));
+        // } else {
+        //     reader.set_attribute(
+        //         "",
+        //         crate::VERSION_ATTRIBUTE_KEY.to_owned(),
+        //         crate::VERSION.to_string(),
+        //     )?;
+        // }
 
-        Ok(reader)
+        // Ok(reader)
     }
 
     pub fn get_attributes(&self, path_name: &str) -> Result<Value> {
@@ -182,121 +206,139 @@ impl N5Filesystem {
     }
 }
 
-impl N5Reader for N5Filesystem {
-    fn get_version(&self) -> Result<Version> {
-        // TODO: dedicated error type should clean this up.
-        Ok(Version::from_str(
-            self.get_attributes("")?
-                .get(crate::VERSION_ATTRIBUTE_KEY)
-                .ok_or_else(|| Error::new(ErrorKind::NotFound, "Version attribute not present"))?
-                .as_str()
-                .unwrap_or(""),
-        )
-        .unwrap())
+impl ReadableStore for N5Filesystem {
+    type GetReader = BufReader<File>;
+    fn exists(&self, key: &str) -> Result<bool> {
+        let target = self.base_path.join(key);
+        Ok(target.is_file())
     }
-
-    fn get_dataset_attributes(&self, path_name: &str) -> Result<DatasetAttributes> {
-        let attr_path = self.get_attributes_path(path_name)?;
-        let reader = BufReader::new(File::open(attr_path)?);
-        Ok(serde_json::from_reader(reader)?)
-    }
-
-    fn exists(&self, path_name: &str) -> Result<bool> {
-        let target = self.get_path(path_name)?;
-        Ok(target.is_dir())
-    }
-
-    fn get_block_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String> {
-        self.get_data_block_path(path_name, grid_position)?
-            .to_str()
-            // TODO: could use URL crate and `from_file_path` here.
-            .map(|s| format!("file://{}", s))
-            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Paths must be UTF-8"))
-    }
-
-    fn read_block<T>(
-        &self,
-        path_name: &str,
-        data_attrs: &DatasetAttributes,
-        grid_position: GridCoord,
-    ) -> Result<Option<VecDataBlock<T>>>
-    where
-        VecDataBlock<T>: DataBlock<T> + ReadableDataBlock,
-        T: ReflectedType,
-    {
-        let block_file = self.get_data_block_path(path_name, &grid_position)?;
-        if block_file.is_file() {
-            let file = File::open(block_file)?;
-            file.lock_shared()?;
-            let reader = BufReader::new(file);
-            Ok(Some(
-                <crate::DefaultBlock as DefaultBlockReader<T, _>>::read_block(
-                    reader,
-                    data_attrs,
-                    grid_position,
-                )?,
-            ))
+    fn get(&self, key: &str) -> Result<Option<Self::GetReader>> {
+        let target = self.base_path.join(key);
+        if target.is_file() {
+            let file = File::open(target)?;
+            // TODO: lock
+            Ok(Some(BufReader::new(file)))
         } else {
             Ok(None)
         }
-    }
-
-    fn read_block_into<
-        T: ReflectedType,
-        B: DataBlock<T> + ReinitDataBlock<T> + ReadableDataBlock,
-    >(
-        &self,
-        path_name: &str,
-        data_attrs: &DatasetAttributes,
-        grid_position: GridCoord,
-        block: &mut B,
-    ) -> Result<Option<()>> {
-        let block_file = self.get_data_block_path(path_name, &grid_position)?;
-        if block_file.is_file() {
-            let file = File::open(block_file)?;
-            file.lock_shared()?;
-            let reader = BufReader::new(file);
-            <crate::DefaultBlock as DefaultBlockReader<T, _>>::read_block_into(
-                reader,
-                data_attrs,
-                grid_position,
-                block,
-            )?;
-            Ok(Some(()))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn block_metadata(
-        &self,
-        path_name: &str,
-        _data_attrs: &DatasetAttributes,
-        grid_position: &[u64],
-    ) -> Result<Option<DataBlockMetadata>> {
-        let block_file = self.get_data_block_path(path_name, grid_position)?;
-        if block_file.is_file() {
-            let metadata = std::fs::metadata(block_file)?;
-            Ok(Some(DataBlockMetadata {
-                created: metadata.created().ok(),
-                accessed: metadata.accessed().ok(),
-                modified: metadata.modified().ok(),
-                size: Some(metadata.len()),
-            }))
-        } else {
-            Ok(None)
-        }
-    }
-
-    // TODO: dupe with get_attributes w/ different empty behaviors
-    fn list_attributes(&self, path_name: &str) -> Result<Value> {
-        let attr_path = self.get_attributes_path(path_name)?;
-        let file = File::open(attr_path)?;
-        file.lock_shared()?;
-        let reader = BufReader::new(file);
-        Ok(serde_json::from_reader(reader)?)
     }
 }
+
+// impl N5Reader for N5Filesystem {
+//     fn get_version(&self) -> Result<Version> {
+//         // TODO: dedicated error type should clean this up.
+//         Ok(Version::from_str(
+//             self.get_attributes("")?
+//                 .get(crate::VERSION_ATTRIBUTE_KEY)
+//                 .ok_or_else(|| Error::new(ErrorKind::NotFound, "Version attribute not present"))?
+//                 .as_str()
+//                 .unwrap_or(""),
+//         )
+//         .unwrap())
+//     }
+
+//     fn get_dataset_attributes(&self, path_name: &str) -> Result<DatasetAttributes> {
+//         let attr_path = self.get_attributes_path(path_name)?;
+//         let reader = BufReader::new(File::open(attr_path)?);
+//         Ok(serde_json::from_reader(reader)?)
+//     }
+
+//     fn exists(&self, path_name: &str) -> Result<bool> {
+//         let target = self.get_path(path_name)?;
+//         Ok(target.is_dir())
+//     }
+
+//     fn get_block_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String> {
+//         self.get_data_block_path(path_name, grid_position)?
+//             .to_str()
+//             // TODO: could use URL crate and `from_file_path` here.
+//             .map(|s| format!("file://{}", s))
+//             .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Paths must be UTF-8"))
+//     }
+
+//     fn read_block<T>(
+//         &self,
+//         path_name: &str,
+//         data_attrs: &DatasetAttributes,
+//         grid_position: GridCoord,
+//     ) -> Result<Option<VecDataBlock<T>>>
+//     where
+//         VecDataBlock<T>: DataBlock<T> + ReadableDataBlock,
+//         T: ReflectedType,
+//     {
+//         let block_file = self.get_data_block_path(path_name, &grid_position)?;
+//         if block_file.is_file() {
+//             let file = File::open(block_file)?;
+//             file.lock_shared()?;
+//             let reader = BufReader::new(file);
+//             Ok(Some(
+//                 <crate::DefaultBlock as DefaultBlockReader<T, _>>::read_block(
+//                     reader,
+//                     data_attrs,
+//                     grid_position,
+//                 )?,
+//             ))
+//         } else {
+//             Ok(None)
+//         }
+//     }
+
+//     fn read_block_into<
+//         T: ReflectedType,
+//         B: DataBlock<T> + ReinitDataBlock<T> + ReadableDataBlock,
+//     >(
+//         &self,
+//         path_name: &str,
+//         data_attrs: &DatasetAttributes,
+//         grid_position: GridCoord,
+//         block: &mut B,
+//     ) -> Result<Option<()>> {
+//         let block_file = self.get_data_block_path(path_name, &grid_position)?;
+//         if block_file.is_file() {
+//             let file = File::open(block_file)?;
+//             file.lock_shared()?;
+//             let reader = BufReader::new(file);
+//             <crate::DefaultBlock as DefaultBlockReader<T, _>>::read_block_into(
+//                 reader,
+//                 data_attrs,
+//                 grid_position,
+//                 block,
+//             )?;
+//             Ok(Some(()))
+//         } else {
+//             Ok(None)
+//         }
+//     }
+
+//     fn block_metadata(
+//         &self,
+//         path_name: &str,
+//         _data_attrs: &DatasetAttributes,
+//         grid_position: &[u64],
+//     ) -> Result<Option<DataBlockMetadata>> {
+//         let block_file = self.get_data_block_path(path_name, grid_position)?;
+//         if block_file.is_file() {
+//             let metadata = std::fs::metadata(block_file)?;
+//             Ok(Some(DataBlockMetadata {
+//                 created: metadata.created().ok(),
+//                 accessed: metadata.accessed().ok(),
+//                 modified: metadata.modified().ok(),
+//                 size: Some(metadata.len()),
+//             }))
+//         } else {
+//             Ok(None)
+//         }
+//     }
+
+//     // TODO: dupe with get_attributes w/ different empty behaviors
+//     fn list_attributes(&self, path_name: &str) -> Result<Value> {
+//         let attr_path = self.get_attributes_path(path_name)?;
+//         let file = File::open(attr_path)?;
+//         file.lock_shared()?;
+//         let reader = BufReader::new(file);
+//         Ok(serde_json::from_reader(reader)?)
+//     }
+// }
 
 impl N5Lister for N5Filesystem {
     fn list(&self, path_name: &str) -> Result<Vec<String>> {
@@ -409,17 +451,18 @@ impl N5Writer for N5Filesystem {
         <crate::DefaultBlock as DefaultBlockWriter<T, _, _>>::write_block(buffer, data_attrs, block)
     }
 
-    fn delete_block(&self, path_name: &str, grid_position: &[u64]) -> Result<bool> {
-        let path = self.get_data_block_path(path_name, grid_position)?;
+    // TODO
+    // fn delete_block(&self, path_name: &str, grid_position: &[u64]) -> Result<bool> {
+    //     let path = self.get_data_block_path(path_name, grid_position)?;
 
-        if path.exists() {
-            let file = fs::OpenOptions::new().read(true).open(&path)?;
-            file.lock_exclusive()?;
-            fs::remove_file(&path)?;
-        }
+    //     if path.exists() {
+    //         let file = fs::OpenOptions::new().read(true).open(&path)?;
+    //         file.lock_exclusive()?;
+    //         fs::remove_file(&path)?;
+    //     }
 
-        Ok(!path.exists())
-    }
+    //     Ok(!path.exists())
+    // }
 }
 
 #[cfg(test)]
@@ -498,7 +541,8 @@ mod tests {
         std::os::windows::fs::symlink_dir(dir.path(), &linked_path).unwrap();
 
         assert_eq!(wrapper.n5.list("").unwrap(), vec!["linked_dataset"]);
-        assert!(wrapper.n5.exists("linked_dataset").unwrap());
+        // TODO
+        // assert!(wrapper.n5.exists("linked_dataset").unwrap());
 
         let data_attrs = DatasetAttributes::new(
             smallvec![10, 10, 10],
@@ -540,7 +584,7 @@ mod tests {
         );
         let block_data: Vec<i32> = (0..125_i32).collect();
         let block_in = crate::SliceDataBlock::new(
-            data_attrs.block_size.clone(),
+            data_attrs.chunk_grid.block_size.clone(),
             smallvec![0, 0, 0],
             &block_data,
         );
@@ -567,7 +611,7 @@ mod tests {
         // Shorten data (this still will not catch trailing data less than the length).
         let block_data: Vec<i32> = (0..10_i32).collect();
         let block_in = crate::SliceDataBlock::new(
-            data_attrs.block_size.clone(),
+            data_attrs.chunk_grid.block_size.clone(),
             smallvec![0, 0, 0],
             &block_data,
         );

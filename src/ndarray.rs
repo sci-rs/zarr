@@ -395,14 +395,14 @@ impl DatasetAttributes {
         let floor_coord: GridCoord = bbox
             .offset
             .iter()
-            .zip(&self.block_size)
+            .zip(&self.chunk_grid.block_size)
             .map(|(&o, &bs)| o / u64::from(bs))
             .collect();
         let ceil_coord: GridCoord = bbox
             .offset
             .iter()
             .zip(&bbox.size)
-            .zip(self.block_size.iter().cloned().map(u64::from))
+            .zip(self.chunk_grid.block_size.iter().cloned().map(u64::from))
             .map(|((&o, &s), bs)| (o + s + bs - 1) / bs)
             .collect();
 
@@ -502,12 +502,12 @@ pub(crate) mod tests {
     fn test_dataset_attributes_coord_iter() {
         use std::collections::HashSet;
 
-        let data_attrs = DatasetAttributes {
-            dimensions: smallvec![1, 4, 5],
-            block_size: smallvec![1, 2, 3],
-            data_type: DataType::INT16,
-            compression: crate::compression::CompressionType::default(),
-        };
+        let data_attrs = DatasetAttributes::new(
+            smallvec![1, 4, 5],
+            smallvec![1, 2, 3],
+            DataType::INT16,
+            crate::compression::CompressionType::default(),
+        );
 
         let coords: HashSet<Vec<u64>> = data_attrs.coord_iter().collect();
         let expected: HashSet<Vec<u64>> =
