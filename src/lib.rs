@@ -108,9 +108,22 @@ pub struct DataBlockMetadata {
     pub size: Option<u64>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EntryPointMetadata {
+    zarr_format: String,
+    metadata_encoding: String,
     metadata_key_suffix: String,
+    // TODO: extensions
+}
+
+impl Default for EntryPointMetadata {
+    fn default() -> Self {
+        Self {
+            zarr_format: "https://purl.org/zarr/spec/protocol/core/3.0".to_owned(),
+            metadata_encoding: "https://purl.org/zarr/spec/protocol/core/3.0".to_owned(),
+            metadata_key_suffix: ".json".to_owned(),
+        }
+    }
 }
 
 pub trait ReadableStore {

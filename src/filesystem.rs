@@ -47,6 +47,8 @@ use crate::{
     WriteableDataBlock,
 };
 
+// TODO
+const ENTRY_POINT_FILE: &str = "zarr.json";
 /// Name of the attributes file stored in the container root and dataset dirs.
 const ATTRIBUTES_FILE: &str = "attributes.json";
 
@@ -64,13 +66,10 @@ impl Hierarchy for N5Filesystem {
 }
 
 impl N5Filesystem {
-    fn read_entry_point_metadata<P: AsRef<std::path::Path>>(
-        base_path: P,
-    ) -> Result<EntryPointMetadata> {
-        // TODO
-        Ok(EntryPointMetadata {
-            metadata_key_suffix: ".json".to_owned(),
-        })
+    fn read_entry_point_metadata(base_path: &PathBuf) -> Result<EntryPointMetadata> {
+        let entry_point_path = base_path.join(ENTRY_POINT_FILE);
+        let reader = BufReader::new(File::open(entry_point_path)?);
+        Ok(serde_json::from_reader(reader)?)
     }
 
     /// Open an existing N5 container by path.
@@ -98,12 +97,30 @@ impl N5Filesystem {
     ///
     /// Note this will update the version attribute for existing containers.
     pub fn open_or_create<P: AsRef<std::path::Path>>(base_path: P) -> Result<N5Filesystem> {
-        todo!()
-        // let reader = N5Filesystem {
-        //     base_path: PathBuf::from(base_path.as_ref()),
-        // };
+        let base_path = PathBuf::from(base_path.as_ref());
+        let entry_point_path = base_path.join(ENTRY_POINT_FILE);
 
-        // fs::create_dir_all(base_path)?;
+        let entry_point_metadata = if entry_point_path.exists() {
+            Self::read_entry_point_metadata(&base_path)?
+        } else {
+            fs::create_dir_all(&base_path)?;
+            let metadata = EntryPointMetadata::default();
+            let file = fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(entry_point_path)?;
+            file.lock_exclusive()?;
+
+            let writer = BufWriter::new(file);
+            serde_json::to_writer(writer, &metadata)?;
+            metadata
+        };
+
+        let reader = N5Filesystem {
+            base_path,
+            entry_point_metadata,
+        };
 
         // if reader
         //     .get_version()
@@ -119,7 +136,7 @@ impl N5Filesystem {
         //     )?;
         // }
 
-        // Ok(reader)
+        Ok(reader)
     }
 
     pub fn get_attributes(&self, path_name: &str) -> Result<Value> {
