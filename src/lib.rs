@@ -95,6 +95,8 @@ fn add_extension(path: &mut std::path::PathBuf, extension: impl AsRef<std::path:
 
 /// Key name for the version attribute in the container root.
 pub const VERSION_ATTRIBUTE_KEY: &str = "n5";
+const DATA_ROOT_PATH: &str = "/data/root";
+const META_ROOT_PATH: &str = "/meta/root";
 const ARRAY_METADATA_PATH: &str = ".array";
 const GROUP_METADATA_PATH: &str = ".group";
 
@@ -152,6 +154,26 @@ pub trait WriteableStore {
 
 pub trait Hierarchy {
     fn get_entry_point_metadata(&self) -> &EntryPointMetadata;
+
+    fn array_metadata_key(&self, path_name: &str) -> PathBuf {
+        let mut key = PathBuf::from(META_ROOT_PATH).join(path_name);
+        add_extension(&mut key, ARRAY_METADATA_PATH);
+        add_extension(
+            &mut key,
+            &self.get_entry_point_metadata().metadata_key_suffix,
+        );
+        key
+    }
+
+    fn group_metadata_key(&self, path_name: &str) -> PathBuf {
+        let mut key = PathBuf::from(META_ROOT_PATH).join(path_name);
+        add_extension(&mut key, GROUP_METADATA_PATH);
+        add_extension(
+            &mut key,
+            &self.get_entry_point_metadata().metadata_key_suffix,
+        );
+        key
+    }
 }
 
 /// Non-mutating operations on N5 containers.
@@ -231,12 +253,7 @@ impl<S: ReadableStore + Hierarchy> N5Reader for S {
     }
 
     fn get_dataset_attributes(&self, path_name: &str) -> Result<DatasetAttributes, Error> {
-        let mut dataset_path = PathBuf::from("/meta/root/").join(path_name);
-        add_extension(&mut dataset_path, ARRAY_METADATA_PATH);
-        add_extension(
-            &mut dataset_path,
-            &self.get_entry_point_metadata().metadata_key_suffix,
-        );
+        let dataset_path = self.array_metadata_key(path_name);
         let value_reader = ReadableStore::get(self, &dataset_path.to_str().expect("TODO"))?
             .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;
         Ok(serde_json::from_reader(value_reader)?)
@@ -264,10 +281,10 @@ impl<S: ReadableStore + Hierarchy> N5Reader for S {
         assert!(data_attrs.in_bounds(&grid_position));
 
         // Construct block path string
-        let block_path = get_block_path(path_name, data_attrs, &grid_position);
+        let block_key = get_block_key(path_name, data_attrs, &grid_position);
 
         // Get key from store
-        let value_reader = ReadableStore::get(self, &block_path)?;
+        let value_reader = ReadableStore::get(self, &block_key)?;
 
         // Read value into container
         value_reader
@@ -295,10 +312,10 @@ impl<S: ReadableStore + Hierarchy> N5Reader for S {
         assert!(data_attrs.in_bounds(&grid_position));
 
         // Construct block path string
-        let block_path = get_block_path(path_name, data_attrs, &grid_position);
+        let block_key = get_block_key(path_name, data_attrs, &grid_position);
 
         // Get key from store
-        let value_reader = ReadableStore::get(self, &block_path)?;
+        let value_reader = ReadableStore::get(self, &block_key)?;
 
         // Read value into container
         value_reader
@@ -323,23 +340,35 @@ impl<S: ReadableStore + Hierarchy> N5Reader for S {
     }
 
     fn list_attributes(&self, path_name: &str) -> Result<serde_json::Value, Error> {
-        todo!()
+        // TODO: wasteful path recomputation
+        let metadata_key =
+            if self.exists(self.array_metadata_key(path_name).to_str().expect("TODO"))? {
+                self.array_metadata_key(path_name)
+            } else if self.exists(self.group_metadata_key(path_name).to_str().expect("TODO"))? {
+                self.group_metadata_key(path_name)
+            } else {
+                return Err(Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Node does not exist at path",
+                ));
+            };
+
+        // TODO: race condition
+        let value_reader = ReadableStore::get(self, &metadata_key.to_str().expect("TODO"))?
+            .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;
+        Ok(serde_json::from_reader(value_reader)?)
     }
 }
 
-fn get_block_path(
-    base_path: &str,
-    data_attrs: &DatasetAttributes,
-    grid_position: &[u64],
-) -> String {
+fn get_block_key(base_path: &str, data_attrs: &DatasetAttributes, grid_position: &[u64]) -> String {
     use std::fmt::Write;
     // TODO remove allocs and cleanup
-    let mut block_path = match grid_position.len() {
+    let mut block_key = match grid_position.len() {
         0 => base_path.to_owned(),
         _ => format!("{}/", base_path),
     };
     write!(
-        block_path,
+        block_key,
         "c{}",
         grid_position
             .iter()
@@ -349,7 +378,7 @@ fn get_block_path(
     )
     .unwrap();
 
-    block_path
+    block_key
 }
 
 /// Non-mutating operations on N5 containers that support group discoverability.
@@ -432,6 +461,7 @@ pub trait N5Writer: N5Reader {
 
 // From: https://github.com/serde-rs/json/issues/377
 // TODO: Could be much better.
+// TODO: n5 filesystem later settled on top-level key merging only.
 fn merge(a: &mut Value, b: &Value) {
     match (a, b) {
         (&mut Value::Object(ref mut a), &Value::Object(ref b)) => {
@@ -451,12 +481,12 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> N5Writer for S {
         path_name: &str,
         attributes: serde_json::Map<String, serde_json::Value>,
     ) -> Result<(), Error> {
-        let path_buf = PathBuf::from(path_name);
-        let metadata_path =
-            if self.exists(path_buf.join(ARRAY_METADATA_PATH).to_str().expect("TODO"))? {
-                path_buf.join(ARRAY_METADATA_PATH)
-            } else if self.exists(path_buf.join(GROUP_METADATA_PATH).to_str().expect("TODO"))? {
-                path_buf.join(GROUP_METADATA_PATH)
+        // TODO: wasteful path recomputation
+        let metadata_key =
+            if self.exists(self.array_metadata_key(path_name).to_str().expect("TODO"))? {
+                self.array_metadata_key(path_name)
+            } else if self.exists(self.group_metadata_key(path_name).to_str().expect("TODO"))? {
+                self.group_metadata_key(path_name)
             } else {
                 return Err(Error::new(
                     std::io::ErrorKind::NotFound,
@@ -465,15 +495,16 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> N5Writer for S {
             };
 
         // TODO: race condition
-        let value_reader = ReadableStore::get(self, &metadata_path.to_str().expect("TODO"))?
+        let value_reader = ReadableStore::get(self, &metadata_key.to_str().expect("TODO"))?
             .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;
         let existing: Value = serde_json::from_reader(value_reader)?;
 
+        // TODO: determine whether attribute merging is still necessary for zarr
         let mut merged = existing.clone();
         let new: Value = attributes.into();
         merge(&mut merged, &new);
         if merged != existing {
-            self.set(metadata_path.to_str().expect("TODO"), |writer| {
+            self.set(metadata_key.to_str().expect("TODO"), |writer| {
                 Ok(serde_json::to_writer(writer, &merged)?)
             })?;
         }
@@ -485,35 +516,36 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> N5Writer for S {
         if let Some(parent) = path_buf.parent() {
             self.create_group(parent.to_str().expect("TODO"))?;
         }
-        let metadata_path = path_buf.join(GROUP_METADATA_PATH);
-        if self.exists(path_buf.join(ARRAY_METADATA_PATH).to_str().expect("TODO"))? {
+        let metadata_key = self.group_metadata_key(path_name);
+        if self.exists(self.array_metadata_key(path_name).to_str().expect("TODO"))? {
             Err(Error::new(
                 std::io::ErrorKind::AlreadyExists,
                 "Array already exists at group path",
             ))
-        } else if self.exists(metadata_path.to_str().expect("TODO"))? {
+        } else if self.exists(metadata_key.to_str().expect("TODO"))? {
             Ok(())
         } else {
-            self.set(metadata_path.to_str().expect("TODO"), |writer| {
+            self.set(metadata_key.to_str().expect("TODO"), |writer| {
                 Ok(serde_json::to_writer(writer, &GroupMetadata::default())?)
             })
         }
     }
+
     fn create_dataset(&self, path_name: &str, data_attrs: &DatasetAttributes) -> Result<(), Error> {
         let path_buf = PathBuf::from(path_name);
         if let Some(parent) = path_buf.parent() {
             self.create_group(parent.to_str().expect("TODO"))?;
         }
-        let metadata_path = path_buf.join(ARRAY_METADATA_PATH);
-        if self.exists(path_buf.join(GROUP_METADATA_PATH).to_str().expect("TODO"))?
-            || self.exists(metadata_path.to_str().expect("TODO"))?
+        let metadata_key = self.array_metadata_key(path_name);
+        if self.exists(self.group_metadata_key(path_name).to_str().expect("TODO"))?
+            || self.exists(metadata_key.to_str().expect("TODO"))?
         {
             Err(Error::new(
                 std::io::ErrorKind::AlreadyExists,
                 "Node already exists at array path",
             ))
         } else {
-            self.set(metadata_path.to_str().expect("TODO"), |writer| {
+            self.set(metadata_key.to_str().expect("TODO"), |writer| {
                 Ok(serde_json::to_writer(writer, data_attrs)?)
             })
         }
@@ -531,8 +563,8 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> N5Writer for S {
     ) -> Result<(), Error> {
         // TODO convert assert
         // assert!(data_attrs.in_bounds(block.get_grid_position()));
-        let block_path = get_block_path(path_name, data_attrs, block.get_grid_position());
-        self.set(&block_path, |writer| {
+        let block_key = get_block_key(path_name, data_attrs, block.get_grid_position());
+        self.set(&block_key, |writer| {
             <DefaultBlock as DefaultBlockWriter<T, _, _>>::write_block(writer, data_attrs, block)
         })
     }

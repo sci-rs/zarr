@@ -145,6 +145,7 @@ pub(crate) fn test_varlength_block_rw(compression: compression::CompressionType)
 pub(crate) fn create_backend<N: N5Testable>() {
     let wrapper = N::temp_new_rw();
     let create = wrapper.as_ref();
+    create.create_group("").unwrap();
     create
         .set_attribute("", "foo".to_owned(), "bar")
         .expect("Failed to set attribute");

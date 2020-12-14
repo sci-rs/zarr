@@ -45,6 +45,7 @@ use crate::{
     VecDataBlock,
     Version,
     WriteableDataBlock,
+    WriteableStore,
 };
 
 // TODO
@@ -227,12 +228,12 @@ impl ReadableStore for N5Filesystem {
     type GetReader = BufReader<File>;
 
     fn exists(&self, key: &str) -> Result<bool> {
-        let target = self.base_path.join(key);
+        let target = self.get_path(key)?;
         Ok(target.is_file())
     }
 
     fn get(&self, key: &str) -> Result<Option<Self::GetReader>> {
-        let target = self.base_path.join(key);
+        let target = self.get_path(key)?;
         if target.is_file() {
             let file = File::open(target)?;
             // TODO: lock
@@ -395,43 +396,30 @@ fn merge_top_level(a: &mut Value, b: serde_json::Map<String, Value>) {
     }
 }
 
-impl N5Writer for N5Filesystem {
-    fn set_attributes(
-        &self,
-        path_name: &str,
-        attributes: serde_json::Map<String, Value>,
-    ) -> Result<()> {
-        let mut file = fs::OpenOptions::new()
+impl WriteableStore for N5Filesystem {
+    type SetWriter = BufWriter<File>;
+
+    fn set<F: FnOnce(Self::SetWriter) -> Result<()>>(&self, key: &str, value: F) -> Result<()> {
+        let target = self.get_path(key)?;
+        if let Some(parent) = target.parent() {
+            if !parent.exists() {
+                fs::create_dir(parent)?;
+            }
+        }
+
+        let file = fs::OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
-            .open(self.get_attributes_path(path_name)?)?;
-        file.lock_exclusive()?;
+            .open(target)?;
 
-        let mut existing_buf = String::new();
-        file.read_to_string(&mut existing_buf)?;
-        let existing = serde_json::from_str(&existing_buf).unwrap_or_else(|_| json!({}));
-        let mut merged = existing.clone();
+        let writer = BufWriter::new(file);
 
-        merge_top_level(&mut merged, attributes);
-
-        if merged != existing {
-            file.set_len(0)?;
-            file.seek(SeekFrom::Start(0))?;
-            let writer = BufWriter::new(file);
-            serde_json::to_writer(writer, &merged)?;
-        }
-
-        Ok(())
+        value(writer)
     }
 
-    fn create_group(&self, path_name: &str) -> Result<()> {
-        let path = self.get_path(path_name)?;
-        fs::create_dir_all(path)
-    }
-
-    fn remove(&self, path_name: &str) -> Result<()> {
-        let path = self.get_path(path_name)?;
+    fn delete(&self, key: &str) -> Result<()> {
+        let path = self.get_path(key)?;
 
         for entry in WalkDir::new(path).contents_first(true) {
             let entry = entry?;
@@ -447,42 +435,96 @@ impl N5Writer for N5Filesystem {
 
         Ok(())
     }
-
-    fn write_block<T: ReflectedType, B: DataBlock<T> + WriteableDataBlock>(
-        &self,
-        path_name: &str,
-        data_attrs: &DatasetAttributes,
-        block: &B,
-    ) -> Result<()> {
-        let path = self.get_data_block_path(path_name, block.get_grid_position())?;
-        fs::create_dir_all(path.parent().expect("TODO: root block path?"))?;
-
-        let file = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(path)?;
-        file.lock_exclusive()?;
-        // Truncate after the lock is acquired, rather than on opening.
-        file.set_len(0)?;
-
-        let buffer = BufWriter::new(file);
-        <crate::DefaultBlock as DefaultBlockWriter<T, _, _>>::write_block(buffer, data_attrs, block)
-    }
-
-    // TODO
-    // fn delete_block(&self, path_name: &str, grid_position: &[u64]) -> Result<bool> {
-    //     let path = self.get_data_block_path(path_name, grid_position)?;
-
-    //     if path.exists() {
-    //         let file = fs::OpenOptions::new().read(true).open(&path)?;
-    //         file.lock_exclusive()?;
-    //         fs::remove_file(&path)?;
-    //     }
-
-    //     Ok(!path.exists())
-    // }
 }
+
+// impl N5Writer for N5Filesystem {
+//     fn set_attributes(
+//         &self,
+//         path_name: &str,
+//         attributes: serde_json::Map<String, Value>,
+//     ) -> Result<()> {
+//         let mut file = fs::OpenOptions::new()
+//             .read(true)
+//             .write(true)
+//             .create(true)
+//             .open(self.get_attributes_path(path_name)?)?;
+//         file.lock_exclusive()?;
+
+//         let mut existing_buf = String::new();
+//         file.read_to_string(&mut existing_buf)?;
+//         let existing = serde_json::from_str(&existing_buf).unwrap_or_else(|_| json!({}));
+//         let mut merged = existing.clone();
+
+//         merge_top_level(&mut merged, attributes);
+
+//         if merged != existing {
+//             file.set_len(0)?;
+//             file.seek(SeekFrom::Start(0))?;
+//             let writer = BufWriter::new(file);
+//             serde_json::to_writer(writer, &merged)?;
+//         }
+
+//         Ok(())
+//     }
+
+//     fn create_group(&self, path_name: &str) -> Result<()> {
+//         let path = self.get_path(path_name)?;
+//         fs::create_dir_all(path)
+//     }
+
+//     fn remove(&self, path_name: &str) -> Result<()> {
+//         let path = self.get_path(path_name)?;
+
+//         for entry in WalkDir::new(path).contents_first(true) {
+//             let entry = entry?;
+
+//             if entry.file_type().is_dir() {
+//                 fs::remove_dir(entry.path())?;
+//             } else {
+//                 let file = File::open(entry.path())?;
+//                 file.lock_exclusive()?;
+//                 fs::remove_file(entry.path())?;
+//             }
+//         }
+
+//         Ok(())
+//     }
+
+//     fn write_block<T: ReflectedType, B: DataBlock<T> + WriteableDataBlock>(
+//         &self,
+//         path_name: &str,
+//         data_attrs: &DatasetAttributes,
+//         block: &B,
+//     ) -> Result<()> {
+//         let path = self.get_data_block_path(path_name, block.get_grid_position())?;
+//         fs::create_dir_all(path.parent().expect("TODO: root block path?"))?;
+
+//         let file = fs::OpenOptions::new()
+//             .read(true)
+//             .write(true)
+//             .create(true)
+//             .open(path)?;
+//         file.lock_exclusive()?;
+//         // Truncate after the lock is acquired, rather than on opening.
+//         file.set_len(0)?;
+
+//         let buffer = BufWriter::new(file);
+//         <crate::DefaultBlock as DefaultBlockWriter<T, _, _>>::write_block(buffer, data_attrs, block)
+//     }
+
+//     // TODO
+//     // fn delete_block(&self, path_name: &str, grid_position: &[u64]) -> Result<bool> {
+//     //     let path = self.get_data_block_path(path_name, grid_position)?;
+
+//     //     if path.exists() {
+//     //         let file = fs::OpenOptions::new().read(true).open(&path)?;
+//     //         file.lock_exclusive()?;
+//     //         fs::remove_file(&path)?;
+//     //     }
+
+//     //     Ok(!path.exists())
+//     // }
+// }
 
 #[cfg(test)]
 mod tests {
