@@ -225,10 +225,12 @@ impl N5Filesystem {
 
 impl ReadableStore for N5Filesystem {
     type GetReader = BufReader<File>;
+
     fn exists(&self, key: &str) -> Result<bool> {
         let target = self.base_path.join(key);
         Ok(target.is_file())
     }
+
     fn get(&self, key: &str) -> Result<Option<Self::GetReader>> {
         let target = self.base_path.join(key);
         if target.is_file() {

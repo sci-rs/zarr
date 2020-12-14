@@ -151,10 +151,10 @@ pub(crate) fn create_backend<N: N5Testable>() {
 
     let read = create.open_reader();
 
-    assert_eq!(
-        read.get_version().expect("Cannot read version"),
-        crate::VERSION
-    );
+    assert!(read
+        .get_version()
+        .expect("Cannot read version")
+        .matches(&crate::VERSION));
     assert_eq!(read.list_attributes("").unwrap()["foo"], "bar");
 }
 

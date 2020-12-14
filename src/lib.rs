@@ -53,7 +53,10 @@ pub mod prelude;
 #[macro_use]
 pub(crate) mod tests;
 
-pub use semver::Version;
+pub use semver::{
+    Version,
+    VersionReq,
+};
 
 const COORD_SMALLVEC_SIZE: usize = 6;
 pub type CoordVec<T> = SmallVec<[T; COORD_SMALLVEC_SIZE]>;
@@ -64,9 +67,9 @@ type N5Endian = BigEndian;
 
 /// Version of the Java N5 spec supported by this library.
 pub const VERSION: Version = Version {
-    major: 2,
-    minor: 1,
-    patch: 3,
+    major: 3,
+    minor: 0,
+    patch: 0,
     pre: Vec::new(),
     build: Vec::new(),
 };
@@ -154,7 +157,7 @@ pub trait Hierarchy {
 /// Non-mutating operations on N5 containers.
 pub trait N5Reader: Hierarchy {
     /// Get the N5 specification version of the container.
-    fn get_version(&self) -> Result<Version, Error>;
+    fn get_version(&self) -> Result<VersionReq, Error>;
 
     /// Get attributes for a dataset.
     fn get_dataset_attributes(&self, path_name: &str) -> Result<DatasetAttributes, Error>;
@@ -207,8 +210,24 @@ pub trait N5Reader: Hierarchy {
 }
 
 impl<S: ReadableStore + Hierarchy> N5Reader for S {
-    fn get_version(&self) -> Result<Version, Error> {
-        todo!()
+    fn get_version(&self) -> Result<VersionReq, Error> {
+        let vers_str = self
+            .get_entry_point_metadata()
+            .zarr_format
+            .rsplit('/')
+            .next()
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    "Entry point metadata zarr format URI does not have version",
+                )
+            })?;
+        VersionReq::parse(vers_str).map_err(|_| {
+            Error::new(
+                ErrorKind::InvalidData,
+                "Entry point metadata zarr format URI does not have version",
+            )
+        })
     }
 
     fn get_dataset_attributes(&self, path_name: &str) -> Result<DatasetAttributes, Error> {
