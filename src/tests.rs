@@ -338,7 +338,7 @@ pub(crate) fn delete_block<N: N5Testable>() {
     let wrapper = N::temp_new_rw();
     let create = wrapper.as_ref();
     let data_attrs = DatasetAttributes::new(
-        smallvec![10, 10, 10],
+        smallvec![10, 100, 100],
         smallvec![5, 5, 5],
         DataType::INT32,
         crate::compression::CompressionType::Raw(crate::compression::raw::RawCompression::default()),
@@ -367,10 +367,9 @@ pub(crate) fn delete_block<N: N5Testable>() {
         .expect("Failed to read block")
         .is_some());
 
-    // TODO
-    // assert!(create.delete_block(dataset, &coord_a).unwrap());
-    // assert!(create.delete_block(dataset, &coord_a).unwrap());
-    // assert!(create.delete_block(dataset, &coord_b).unwrap());
+    assert!(create.delete_block(dataset, &data_attrs, &coord_a).unwrap());
+    assert!(create.delete_block(dataset, &data_attrs, &coord_a).unwrap());
+    assert!(create.delete_block(dataset, &data_attrs, &coord_b).unwrap());
 
     assert!(create
         .read_block::<i32>(dataset, &data_attrs, coord_a.clone())

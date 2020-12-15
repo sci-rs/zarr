@@ -149,7 +149,8 @@ pub trait WriteableStore {
         value: F,
     ) -> Result<(), Error>;
 
-    fn delete(&self, key: &str) -> Result<(), Error>;
+    // TODO differs from spec in that it returns a bool indicating existence of the key prior.
+    fn delete(&self, key: &str) -> Result<bool, Error>;
 }
 
 pub trait Hierarchy {
@@ -460,12 +461,16 @@ pub trait N5Writer: N5Reader {
         block: &B,
     ) -> Result<(), Error>;
 
-    // TODO
-    // /// Delete a block from a dataset.
-    // ///
-    // /// Returns `true` if the block does not exist on the backend at the
-    // /// completion of the call.
-    // fn delete_block(&self, path_name: &str, grid_position: &[u64]) -> Result<bool, Error>;
+    /// Delete a block from a dataset.
+    ///
+    /// Returns `true` if the block does not exist on the backend at the
+    /// completion of the call.
+    fn delete_block(
+        &self,
+        path_name: &str,
+        data_attrs: &DatasetAttributes,
+        grid_position: &[u64],
+    ) -> Result<bool, Error>;
 }
 
 // From: https://github.com/serde-rs/json/issues/377
@@ -565,7 +570,7 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> N5Writer for S {
     }
 
     fn remove(&self, path_name: &str) -> Result<(), Error> {
-        self.delete(path_name)
+        self.delete(path_name).map(|_| ())
     }
 
     fn write_block<T: ReflectedType, B: DataBlock<T> + WriteableDataBlock>(
@@ -580,6 +585,16 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> N5Writer for S {
         self.set(&block_key, |writer| {
             <DefaultBlock as DefaultBlockWriter<T, _, _>>::write_block(writer, data_attrs, block)
         })
+    }
+
+    fn delete_block(
+        &self,
+        path_name: &str,
+        data_attrs: &DatasetAttributes,
+        grid_position: &[u64],
+    ) -> Result<bool, Error> {
+        let block_key = get_block_key(path_name, data_attrs, grid_position);
+        self.delete(&block_key)
     }
 }
 
