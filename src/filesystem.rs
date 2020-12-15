@@ -403,7 +403,7 @@ impl WriteableStore for N5Filesystem {
         let target = self.get_path(key)?;
         if let Some(parent) = target.parent() {
             if !parent.exists() {
-                fs::create_dir(parent)?;
+                fs::create_dir_all(parent)?;
             }
         }
 

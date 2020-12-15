@@ -260,7 +260,19 @@ impl<S: ReadableStore + Hierarchy> N5Reader for S {
     }
 
     fn exists(&self, path_name: &str) -> Result<bool, Error> {
-        self.exists(path_name)
+        // TODO: needless path allocs
+        // TODO: should follow spec more closely by using `list_dir` for implicit groups.
+        Ok(
+            self.exists(self.array_metadata_key(path_name).to_str().expect("TODO"))?
+                || self.exists(self.group_metadata_key(path_name).to_str().expect("TODO"))?
+                || self.exists(
+                    self.group_metadata_key(path_name)
+                        .with_extension("")
+                        .with_extension("")
+                        .to_str()
+                        .expect("TODO"),
+                )?,
+        )
     }
 
     fn get_block_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String, Error> {
@@ -365,7 +377,7 @@ fn get_block_key(base_path: &str, data_attrs: &DatasetAttributes, grid_position:
     // TODO remove allocs and cleanup
     let mut block_key = match grid_position.len() {
         0 => base_path.to_owned(),
-        _ => format!("{}/", base_path),
+        _ => format!("{}{}/", DATA_ROOT_PATH, base_path),
     };
     write!(
         block_key,
@@ -429,10 +441,7 @@ pub trait N5Writer: N5Reader {
 
     /// Create a dataset. This will create the dataset group and attributes,
     /// but not populate any block data.
-    fn create_dataset(&self, path_name: &str, data_attrs: &DatasetAttributes) -> Result<(), Error> {
-        self.create_group(path_name)?;
-        self.set_dataset_attributes(path_name, data_attrs)
-    }
+    fn create_dataset(&self, path_name: &str, data_attrs: &DatasetAttributes) -> Result<(), Error>;
 
     /// Remove the N5 container.
     fn remove_all(&self) -> Result<(), Error> {
@@ -512,10 +521,12 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> N5Writer for S {
     }
 
     fn create_group(&self, path_name: &str) -> Result<(), Error> {
-        let path_buf = PathBuf::from(path_name);
-        if let Some(parent) = path_buf.parent() {
-            self.create_group(parent.to_str().expect("TODO"))?;
-        }
+        // Because of implicit hierarchy rules, it is not necessary to create
+        // the parent group.
+        // let path_buf = PathBuf::from(path_name);
+        // if let Some(parent) = path_buf.parent() {
+        //     self.create_group(parent.to_str().expect("TODO"))?;
+        // }
         let metadata_key = self.group_metadata_key(path_name);
         if self.exists(self.array_metadata_key(path_name).to_str().expect("TODO"))? {
             Err(Error::new(
@@ -532,10 +543,12 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> N5Writer for S {
     }
 
     fn create_dataset(&self, path_name: &str, data_attrs: &DatasetAttributes) -> Result<(), Error> {
-        let path_buf = PathBuf::from(path_name);
-        if let Some(parent) = path_buf.parent() {
-            self.create_group(parent.to_str().expect("TODO"))?;
-        }
+        // Because of implicit hierarchy rules, it is not necessary to create
+        // the parent group.
+        // let path_buf = PathBuf::from(path_name);
+        // if let Some(parent) = path_buf.parent() {
+        //     self.create_group(parent.to_str().expect("TODO"))?;
+        // }
         let metadata_key = self.array_metadata_key(path_name);
         if self.exists(self.group_metadata_key(path_name).to_str().expect("TODO"))?
             || self.exists(metadata_key.to_str().expect("TODO"))?
