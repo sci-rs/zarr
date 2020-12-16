@@ -320,7 +320,7 @@ pub struct ChunkGridMetadata {
     /// Size of each chunk, in voxels.
     chunk_shape: ChunkCoord,
     /// TODO
-    chunk_separator: String,
+    separator: String,
 }
 
 impl ArrayMetadata {
@@ -342,7 +342,7 @@ impl ArrayMetadata {
             // TODO
             chunk_grid: ChunkGridMetadata {
                 chunk_shape,
-                chunk_separator: "/".to_owned(),
+                separator: "/".to_owned(),
             },
         }
     }

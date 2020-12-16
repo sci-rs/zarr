@@ -62,7 +62,7 @@ fn get_chunk_key(base_path: &str, array_meta: &ArrayMetadata, grid_position: &[u
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
-            .join(&array_meta.chunk_grid.chunk_separator)
+            .join(&array_meta.chunk_grid.separator)
     )
     .unwrap();
 
