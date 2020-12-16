@@ -1,4 +1,4 @@
-//! A filesystem-backed Zarr container.
+//! A filesystem-backed Zarr hierarchy.
 
 use std::fs::{
     self,
@@ -50,10 +50,10 @@ use crate::{
 
 // TODO
 const ENTRY_POINT_FILE: &str = "zarr.json";
-/// Name of the attributes file stored in the container root and dataset dirs.
+/// Name of the attributes file stored in the hierarchy root and dataset dirs.
 const ATTRIBUTES_FILE: &str = "attributes.json";
 
-/// A filesystem-backed Zarr container.
+/// A filesystem-backed Zarr hierarchy.
 #[derive(Clone, Debug)]
 pub struct FilesystemHierarchy {
     base_path: PathBuf,
@@ -73,7 +73,7 @@ impl FilesystemHierarchy {
         Ok(serde_json::from_reader(reader)?)
     }
 
-    /// Open an existing Zarr container by path.
+    /// Open an existing Zarr hierarchy by path.
     pub fn open<P: AsRef<std::path::Path>>(base_path: P) -> Result<FilesystemHierarchy> {
         let base_path = PathBuf::from(base_path.as_ref());
         let entry_point_metadata = Self::read_entry_point_metadata(&base_path)?;
@@ -94,9 +94,9 @@ impl FilesystemHierarchy {
         Ok(reader)
     }
 
-    /// Open an existing Zarr container by path or create one if none exists.
+    /// Open an existing Zarr hierarchy by path or create one if none exists.
     ///
-    /// Note this will update the version attribute for existing containers.
+    /// Note this will update the version attribute for existing hierarchys.
     pub fn open_or_create<P: AsRef<std::path::Path>>(base_path: P) -> Result<FilesystemHierarchy> {
         let base_path = PathBuf::from(base_path.as_ref());
         let entry_point_path = base_path.join(ENTRY_POINT_FILE);
@@ -185,7 +185,7 @@ impl FilesystemHierarchy {
         }
         let unrooted_path = components.as_path();
 
-        // Check that the path is inside the container's base path.
+        // Check that the path is inside the hierarchy's base path.
         let mut nest: i32 = 0;
         for component in unrooted_path.components() {
             match component {

@@ -73,7 +73,7 @@ pub const VERSION: Version = Version {
 };
 
 /// Determines whether a version of an Zarr implementation is capable of accessing
-/// a version of an Zarr container (`other`).
+/// a version of an Zarr hierarchy (`other`).
 pub fn is_version_compatible(s: &Version, other: &Version) -> bool {
     other.major <= s.major
 }
@@ -91,7 +91,7 @@ fn add_extension(path: &mut std::path::PathBuf, extension: impl AsRef<std::path:
     };
 }
 
-/// Key name for the version attribute in the container root.
+/// Key name for the version attribute in the hierarchy root.
 pub const VERSION_ATTRIBUTE_KEY: &str = "zarr";
 const DATA_ROOT_PATH: &str = "/data/root";
 const META_ROOT_PATH: &str = "/meta/root";
@@ -100,9 +100,9 @@ const GROUP_METADATA_PATH: &str = ".group";
 
 /// Container metadata about a data chunk.
 ///
-/// This is metadata from the persistence layer of the container, such as
+/// This is metadata from the persistence layer of the hierarchy, such as
 /// filesystem access times and on-disk sizes, and is not to be confused with
-/// semantic metadata stored as attributes in the container.
+/// semantic metadata stored as attributes in the hierarchy.
 #[derive(Clone, Debug)]
 pub struct DataChunkMetadata {
     pub created: Option<SystemTime>,
@@ -175,9 +175,9 @@ pub trait Hierarchy {
     }
 }
 
-/// Non-mutating operations on Zarr containers.
+/// Non-mutating operations on Zarr hierarchys.
 pub trait HierarchyReader: Hierarchy {
-    /// Get the Zarr specification version of the container.
+    /// Get the Zarr specification version of the hierarchy.
     fn get_version(&self) -> Result<VersionReq, Error>;
 
     /// Get attributes for a dataset.
@@ -392,13 +392,13 @@ fn get_chunk_key(base_path: &str, data_attrs: &DatasetAttributes, grid_position:
     chunk_key
 }
 
-/// Non-mutating operations on Zarr containers that support group discoverability.
+/// Non-mutating operations on Zarr hierarchys that support group discoverability.
 pub trait HierarchyLister: HierarchyReader {
     /// List all groups (including datasets) in a group.
     fn list(&self, path_name: &str) -> Result<Vec<String>, Error>;
 }
 
-/// Mutating operations on Zarr containers.
+/// Mutating operations on Zarr hierarchys.
 pub trait HierarchyWriter: HierarchyReader {
     /// Set a single attribute.
     fn set_attribute<T: Serialize>(
@@ -442,7 +442,7 @@ pub trait HierarchyWriter: HierarchyReader {
     /// but not populate any chunk data.
     fn create_dataset(&self, path_name: &str, data_attrs: &DatasetAttributes) -> Result<(), Error>;
 
-    /// Remove the Zarr container.
+    /// Remove the Zarr hierarchy.
     fn remove_all(&self) -> Result<(), Error> {
         self.remove("")
     }
