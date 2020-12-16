@@ -1,12 +1,12 @@
-//! N5 prelude.
+//! Zarr prelude.
 //!
 //! This module contains the most used import targets for easy import into
 //! client libraries.
 //!
 //! ```
-//! extern crate n5;
+//! extern crate zarr;
 //!
-//! use n5::prelude::*;
+//! use zarr::prelude::*;
 //! ```
 
 #[doc(no_inline)]
@@ -16,7 +16,7 @@ pub use crate::compression::{
 };
 #[cfg(feature = "filesystem")]
 #[doc(no_inline)]
-pub use crate::filesystem::N5Filesystem;
+pub use crate::filesystem::FilesystemHierarchy;
 #[doc(no_inline)]
 pub use crate::{
     ChunkCoord,
@@ -25,9 +25,9 @@ pub use crate::{
     DataType,
     DatasetAttributes,
     GridCoord,
-    N5Lister,
-    N5Reader,
-    N5Writer,
+    HierarchyLister,
+    HierarchyReader,
+    HierarchyWriter,
     ReflectedType,
     SliceDataChunk,
     VecDataChunk,

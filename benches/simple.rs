@@ -9,9 +9,9 @@ use rand::{
 };
 use test::Bencher;
 
-use n5::prelude::*;
-use n5::smallvec::smallvec;
-use n5::{
+use zarr::prelude::*;
+use zarr::smallvec::smallvec;
+use zarr::{
     DefaultChunk,
     DefaultChunkReader,
     DefaultChunkWriter,
@@ -21,7 +21,7 @@ fn test_chunk_compression_rw<T>(compression: compression::CompressionType, b: &m
 where
     T: 'static + std::fmt::Debug + ReflectedType + PartialEq + Default,
     rand::distributions::Standard: rand::distributions::Distribution<T>,
-    VecDataChunk<T>: n5::ReadableDataChunk + n5::WriteableDataChunk,
+    VecDataChunk<T>: zarr::ReadableDataChunk + zarr::WriteableDataChunk,
 {
     let data_attrs = DatasetAttributes::new(
         smallvec![1024, 1024, 1024],

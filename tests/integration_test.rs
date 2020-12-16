@@ -4,13 +4,13 @@ use rand::{
 };
 use smallvec::smallvec;
 
-use n5::prelude::*;
+use zarr::prelude::*;
 
-fn test_read_write<T, N5: N5Reader + N5Writer>(n: &N5, compression: &CompressionType, dim: usize)
+fn test_read_write<T, Zarr: HierarchyReader + HierarchyWriter>(n: &Zarr, compression: &CompressionType, dim: usize)
 where
     T: 'static + std::fmt::Debug + ReflectedType + PartialEq + Default,
     rand::distributions::Standard: rand::distributions::Distribution<T>,
-    VecDataChunk<T>: n5::ReadableDataChunk + n5::WriteableDataChunk,
+    VecDataChunk<T>: zarr::ReadableDataChunk + zarr::WriteableDataChunk,
 {
     let chunk_size: ChunkCoord = (1..=dim as u32).rev().map(|d| d * 5).collect();
     let data_attrs = DatasetAttributes::new(
@@ -49,7 +49,7 @@ where
     n.remove(path_name).unwrap();
 }
 
-fn test_all_types<N5: N5Reader + N5Writer>(n: &N5, compression: &CompressionType, dim: usize) {
+fn test_all_types<Zarr: HierarchyReader + HierarchyWriter>(n: &Zarr, compression: &CompressionType, dim: usize) {
     test_read_write::<u8, _>(n, compression, dim);
     test_read_write::<u16, _>(n, compression, dim);
     test_read_write::<u32, _>(n, compression, dim);
@@ -62,10 +62,10 @@ fn test_all_types<N5: N5Reader + N5Writer>(n: &N5, compression: &CompressionType
     test_read_write::<f64, _>(n, compression, dim);
 }
 
-fn test_n5_filesystem_dim(dim: usize) {
-    let dir = tempdir::TempDir::new("rust_n5_integration_tests").unwrap();
+fn test_zarr_filesystem_dim(dim: usize) {
+    let dir = tempdir::TempDir::new("rust_zarr_integration_tests").unwrap();
 
-    let n = N5Filesystem::open_or_create(dir.path()).expect("Failed to create N5 filesystem");
+    let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
     test_all_types(
         &n,
         &CompressionType::Raw(compression::raw::RawCompression::default()),
@@ -74,13 +74,13 @@ fn test_n5_filesystem_dim(dim: usize) {
 }
 
 #[test]
-fn test_n5_filesystem_dims() {
+fn test_zarr_filesystem_dims() {
     for dim in 1..=5 {
-        test_n5_filesystem_dim(dim);
+        test_zarr_filesystem_dim(dim);
     }
 }
 
-fn test_all_compressions<N5: N5Reader + N5Writer>(n: &N5) {
+fn test_all_compressions<Zarr: HierarchyReader + HierarchyWriter>(n: &Zarr) {
     test_all_types(
         n,
         &CompressionType::Raw(compression::raw::RawCompression::default()),
@@ -113,9 +113,9 @@ fn test_all_compressions<N5: N5Reader + N5Writer>(n: &N5) {
 }
 
 #[test]
-fn test_n5_filesystem_compressions() {
-    let dir = tempdir::TempDir::new("rust_n5_integration_tests").unwrap();
+fn test_zarr_filesystem_compressions() {
+    let dir = tempdir::TempDir::new("rust_zarr_integration_tests").unwrap();
 
-    let n = N5Filesystem::open_or_create(dir.path()).expect("Failed to create N5 filesystem");
+    let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
     test_all_compressions(&n)
 }

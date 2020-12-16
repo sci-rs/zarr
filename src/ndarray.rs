@@ -20,8 +20,8 @@ use crate::{
     DataChunk,
     DatasetAttributes,
     GridCoord,
-    N5Reader,
-    N5Writer,
+    HierarchyReader,
+    HierarchyWriter,
     ReadableDataChunk,
     ReflectedType,
     ReinitDataChunk,
@@ -33,8 +33,8 @@ use crate::{
 pub mod prelude {
     pub use super::{
         BoundingBox,
-        N5NdarrayReader,
-        N5NdarrayWriter,
+        ZarrNdarrayReader,
+        ZarrNdarrayWriter,
     };
 }
 
@@ -61,8 +61,8 @@ impl BoundingBox {
     }
 
     /// ```
-    /// # use n5::ndarray::BoundingBox;
-    /// # use n5::smallvec::smallvec;
+    /// # use zarr::ndarray::BoundingBox;
+    /// # use zarr::smallvec::smallvec;
     /// let mut a = BoundingBox::new(smallvec![0, 0], smallvec![5, 8]);
     /// let b = BoundingBox::new(smallvec![3, 3], smallvec![5, 3]);
     /// let c = BoundingBox::new(smallvec![3, 3], smallvec![2, 3]);
@@ -85,8 +85,8 @@ impl BoundingBox {
     }
 
     /// ```
-    /// # use n5::ndarray::BoundingBox;
-    /// # use n5::smallvec::smallvec;
+    /// # use zarr::ndarray::BoundingBox;
+    /// # use zarr::smallvec::smallvec;
     /// let mut a = BoundingBox::new(smallvec![0, 0], smallvec![5, 8]);
     /// let b = BoundingBox::new(smallvec![3, 3], smallvec![5, 3]);
     /// let c = BoundingBox::new(smallvec![0, 0], smallvec![8, 8]);
@@ -145,8 +145,8 @@ impl Sub<&GridCoord> for BoundingBox {
     }
 }
 
-pub trait N5NdarrayReader: N5Reader {
-    /// Read an arbitrary bounding box from an N5 volume into an ndarray,
+pub trait ZarrNdarrayReader: HierarchyReader {
+    /// Read an arbitrary bounding box from an Zarr volume into an ndarray,
     /// reading chunks in serial as necessary.
     ///
     /// Assumes chunks are column-major and returns a column-major ndarray.
@@ -167,7 +167,7 @@ pub trait N5NdarrayReader: N5Reader {
         Ok(arr)
     }
 
-    /// Read an arbitrary bounding box from an N5 volume into an existing
+    /// Read an arbitrary bounding box from an Zarr volume into an existing
     /// ndarray view, reading chunks in serial as necessary.
     ///
     /// Assumes chunks are column-major. The array can be any order, but column-
@@ -186,7 +186,7 @@ pub trait N5NdarrayReader: N5Reader {
         self.read_ndarray_into_with_buffer(path_name, data_attrs, bbox, arr, &mut None)
     }
 
-    /// Read an arbitrary bounding box from an N5 volume into an existing
+    /// Read an arbitrary bounding box from an Zarr volume into an existing
     /// ndarray view, reading chunks in serial as necessary into a provided
     /// buffer.
     ///
@@ -256,7 +256,7 @@ pub trait N5NdarrayReader: N5Reader {
 
                 let chunk_slice = chunk_read_bb.to_ndarray_slice();
 
-                // N5 datasets are stored f-order/column-major.
+                // Zarr datasets are stored f-order/column-major.
                 let chunk_data =
                     ArrayView::from_shape(chunk_bb.size_ndarray_shape().f(), chunk.get_data())
                         .expect("TODO: chunk ndarray failed");
@@ -271,10 +271,10 @@ pub trait N5NdarrayReader: N5Reader {
     }
 }
 
-impl<T: N5Reader> N5NdarrayReader for T {}
+impl<T: HierarchyReader> ZarrNdarrayReader for T {}
 
-pub trait N5NdarrayWriter: N5Writer {
-    /// Write an arbitrary bounding box from an ndarray into an N5 volume,
+pub trait ZarrNdarrayWriter: HierarchyWriter {
+    /// Write an arbitrary bounding box from an ndarray into an Zarr volume,
     /// writing chunks in serial as necessary.
     fn write_ndarray<'a, T, A>(
         &self,
@@ -374,7 +374,7 @@ pub trait N5NdarrayWriter: N5Writer {
     }
 }
 
-impl<T: N5Writer> N5NdarrayWriter for T {}
+impl<T: HierarchyWriter> ZarrNdarrayWriter for T {}
 
 impl DatasetAttributes {
     pub fn coord_iter(&self) -> impl Iterator<Item = Vec<u64>> + ExactSizeIterator {

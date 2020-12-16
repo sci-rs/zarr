@@ -1,6 +1,4 @@
-//! Interfaces for the [N5 "Not HDF5" n-dimensional tensor file system storage
-//! format](https://github.com/saalfeldlab/n5) created by the Saalfeld lab at
-//! Janelia Research Campus.
+//! TODO.
 
 #![deny(missing_debug_implementations)]
 #![forbid(unsafe_code)]
@@ -63,9 +61,9 @@ pub type CoordVec<T> = SmallVec<[T; COORD_SMALLVEC_SIZE]>;
 pub type ChunkCoord = CoordVec<u32>;
 pub type GridCoord = CoordVec<u64>;
 
-type N5Endian = BigEndian;
+type ZarrEndian = BigEndian;
 
-/// Version of the Java N5 spec supported by this library.
+/// Version of the Java Zarr spec supported by this library.
 pub const VERSION: Version = Version {
     major: 3,
     minor: 0,
@@ -74,8 +72,8 @@ pub const VERSION: Version = Version {
     build: Vec::new(),
 };
 
-/// Determines whether a version of an N5 implementation is capable of accessing
-/// a version of an N5 container (`other`).
+/// Determines whether a version of an Zarr implementation is capable of accessing
+/// a version of an Zarr container (`other`).
 pub fn is_version_compatible(s: &Version, other: &Version) -> bool {
     other.major <= s.major
 }
@@ -94,7 +92,7 @@ fn add_extension(path: &mut std::path::PathBuf, extension: impl AsRef<std::path:
 }
 
 /// Key name for the version attribute in the container root.
-pub const VERSION_ATTRIBUTE_KEY: &str = "n5";
+pub const VERSION_ATTRIBUTE_KEY: &str = "zarr";
 const DATA_ROOT_PATH: &str = "/data/root";
 const META_ROOT_PATH: &str = "/meta/root";
 const ARRAY_METADATA_PATH: &str = ".array";
@@ -177,9 +175,9 @@ pub trait Hierarchy {
     }
 }
 
-/// Non-mutating operations on N5 containers.
-pub trait N5Reader: Hierarchy {
-    /// Get the N5 specification version of the container.
+/// Non-mutating operations on Zarr containers.
+pub trait HierarchyReader: Hierarchy {
+    /// Get the Zarr specification version of the container.
     fn get_version(&self) -> Result<VersionReq, Error>;
 
     /// Get attributes for a dataset.
@@ -232,7 +230,7 @@ pub trait N5Reader: Hierarchy {
     fn list_attributes(&self, path_name: &str) -> Result<serde_json::Value, Error>;
 }
 
-impl<S: ReadableStore + Hierarchy> N5Reader for S {
+impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
     fn get_version(&self) -> Result<VersionReq, Error> {
         let vers_str = self
             .get_entry_point_metadata()
@@ -394,14 +392,14 @@ fn get_chunk_key(base_path: &str, data_attrs: &DatasetAttributes, grid_position:
     chunk_key
 }
 
-/// Non-mutating operations on N5 containers that support group discoverability.
-pub trait N5Lister: N5Reader {
+/// Non-mutating operations on Zarr containers that support group discoverability.
+pub trait HierarchyLister: HierarchyReader {
     /// List all groups (including datasets) in a group.
     fn list(&self, path_name: &str) -> Result<Vec<String>, Error>;
 }
 
-/// Mutating operations on N5 containers.
-pub trait N5Writer: N5Reader {
+/// Mutating operations on Zarr containers.
+pub trait HierarchyWriter: HierarchyReader {
     /// Set a single attribute.
     fn set_attribute<T: Serialize>(
         &self, // TODO: should this be mut for semantics?
@@ -444,7 +442,7 @@ pub trait N5Writer: N5Reader {
     /// but not populate any chunk data.
     fn create_dataset(&self, path_name: &str, data_attrs: &DatasetAttributes) -> Result<(), Error>;
 
-    /// Remove the N5 container.
+    /// Remove the Zarr container.
     fn remove_all(&self) -> Result<(), Error> {
         self.remove("")
     }
@@ -475,7 +473,7 @@ pub trait N5Writer: N5Reader {
 
 // From: https://github.com/serde-rs/json/issues/377
 // TODO: Could be much better.
-// TODO: n5 filesystem later settled on top-level key merging only.
+// TODO: zarr filesystem later settled on top-level key merging only.
 fn merge(a: &mut Value, b: &Value) {
     match (a, b) {
         (&mut Value::Object(ref mut a), &Value::Object(ref b)) => {
@@ -489,7 +487,7 @@ fn merge(a: &mut Value, b: &Value) {
     }
 }
 
-impl<S: ReadableStore + WriteableStore + Hierarchy> N5Writer for S {
+impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
     fn set_attributes(
         &self, // TODO: should this be mut for semantics?
         path_name: &str,
@@ -711,13 +709,13 @@ impl DatasetAttributes {
 
     /// Get the total number of chunks.
     /// ```
-    /// use n5::prelude::*;
-    /// use n5::smallvec::smallvec;
+    /// use zarr::prelude::*;
+    /// use zarr::smallvec::smallvec;
     /// let attrs = DatasetAttributes::new(
     ///     smallvec![50, 40, 30],
     ///     smallvec![11, 10, 10],
     ///     DataType::UINT8,
-    ///     n5::compression::CompressionType::default(),
+    ///     zarr::compression::CompressionType::default(),
     /// );
     /// assert_eq!(attrs.get_num_chunks(), 60);
     /// ```
@@ -727,13 +725,13 @@ impl DatasetAttributes {
 
     /// Check whether a chunk grid position is in the bounds of this dataset.
     /// ```
-    /// use n5::prelude::*;
-    /// use n5::smallvec::smallvec;
+    /// use zarr::prelude::*;
+    /// use zarr::smallvec::smallvec;
     /// let attrs = DatasetAttributes::new(
     ///     smallvec![50, 40, 30],
     ///     smallvec![11, 10, 10],
     ///     DataType::UINT8,
-    ///     n5::compression::CompressionType::default(),
+    ///     zarr::compression::CompressionType::default(),
     /// );
     /// assert!(attrs.in_bounds(&smallvec![4, 3, 2]));
     /// assert!(!attrs.in_bounds(&smallvec![5, 3, 2]));
@@ -771,7 +769,7 @@ pub trait ReinitDataChunk<T> {
 pub trait ReadableDataChunk {
     /// Read data into this chunk from a source, overwriting any existing data.
     ///
-    /// Unlike Java N5, read the stream directly into the chunk data instead
+    /// Unlike Java Zarr, read the stream directly into the chunk data instead
     /// of creating a copied byte buffer.
     fn read_data<R: std::io::Read>(&mut self, source: R) -> std::io::Result<()>;
 }
@@ -784,7 +782,7 @@ pub trait WriteableDataChunk {
 
 /// Common interface for data chunks of element (rust) type `T`.
 ///
-/// To enable custom types to be written to N5 volumes, implement this trait.
+/// To enable custom types to be written to Zarr volumes, implement this trait.
 pub trait DataChunk<T> {
     fn get_size(&self) -> &[u32];
 
@@ -851,7 +849,7 @@ macro_rules! vec_data_chunk_impl {
     ($ty_name:ty, $bo_read_fn:ident, $bo_write_fn:ident) => {
         impl<C: AsMut<[$ty_name]>> ReadableDataChunk for SliceDataChunk<$ty_name, C> {
             fn read_data<R: std::io::Read>(&mut self, mut source: R) -> std::io::Result<()> {
-                source.$bo_read_fn::<N5Endian>(self.data.as_mut())
+                source.$bo_read_fn::<ZarrEndian>(self.data.as_mut())
             }
         }
 
@@ -863,7 +861,7 @@ macro_rules! vec_data_chunk_impl {
 
                 for c in self.data.as_ref().chunks(CHUNK) {
                     let byte_len = c.len() * std::mem::size_of::<$ty_name>();
-                    N5Endian::$bo_write_fn(c, &mut buf[..byte_len]);
+                    ZarrEndian::$bo_write_fn(c, &mut buf[..byte_len]);
                     target.write_all(&buf[..byte_len])?;
                 }
 
@@ -927,13 +925,13 @@ const CHUNK_VAR_LEN: u16 = 1;
 
 pub trait DefaultChunkHeaderReader<R: std::io::Read> {
     fn read_chunk_header(buffer: &mut R, grid_position: GridCoord) -> std::io::Result<ChunkHeader> {
-        let mode = buffer.read_u16::<N5Endian>()?;
-        let ndim = buffer.read_u16::<N5Endian>()?;
+        let mode = buffer.read_u16::<ZarrEndian>()?;
+        let ndim = buffer.read_u16::<ZarrEndian>()?;
         let mut size = smallvec![0; ndim as usize];
-        buffer.read_u32_into::<N5Endian>(&mut size)?;
+        buffer.read_u32_into::<ZarrEndian>(&mut size)?;
         let num_el = match mode {
             CHUNK_FIXED_LEN => size.iter().product(),
-            CHUNK_VAR_LEN => buffer.read_u32::<N5Endian>()?,
+            CHUNK_VAR_LEN => buffer.read_u32::<ZarrEndian>()?,
             _ => return Err(Error::new(ErrorKind::InvalidData, "Unsupported chunk mode")),
         };
 
@@ -1018,14 +1016,14 @@ pub trait DefaultChunkWriter<
         } else {
             CHUNK_VAR_LEN
         };
-        buffer.write_u16::<N5Endian>(mode)?;
-        buffer.write_u16::<N5Endian>(data_attrs.get_ndim() as u16)?;
+        buffer.write_u16::<ZarrEndian>(mode)?;
+        buffer.write_u16::<ZarrEndian>(data_attrs.get_ndim() as u16)?;
         for i in chunk.get_size() {
-            buffer.write_u32::<N5Endian>(*i)?;
+            buffer.write_u32::<ZarrEndian>(*i)?;
         }
 
         if mode != CHUNK_FIXED_LEN {
-            buffer.write_u32::<N5Endian>(chunk.get_num_elements())?;
+            buffer.write_u32::<ZarrEndian>(chunk.get_num_elements())?;
         }
 
         let mut compressor = data_attrs.compression.encoder(buffer);

@@ -1,7 +1,7 @@
 //! # Parallel Writing Benchmarks
 //!
-//! Provides parallel writing benchmarks. For parity with Java N5's
-//! `N5Benchmark`, the benchmark dataset is `i16`, with a 5x5x5 grid of chunks
+//! Provides parallel writing benchmarks. For parity with Java Zarr's
+//! `ZarrBenchmark`, the benchmark dataset is `i16`, with a 5x5x5 grid of chunks
 //! of 64x64x64. The chunks are loaded with data from this file, which
 //! must be manually downloaded and extracted to the `benches` directory:
 //!
@@ -33,8 +33,8 @@ use tiff::decoder::{
     DecodingResult,
 };
 
-use n5::prelude::*;
-use n5::smallvec::smallvec;
+use zarr::prelude::*;
+use zarr::smallvec::smallvec;
 
 lazy_static! {
     static ref TEST_IMAGE: Vec<i8> = {
@@ -63,11 +63,11 @@ lazy_static! {
 const CHUNK_DIM: u32 = 64;
 const N_CHUNKS: u64 = 5;
 
-fn write<T, N5>(n: &N5, compression: &CompressionType, chunk_data: &[T], pool_size: usize)
+fn write<T, Zarr>(n: &Zarr, compression: &CompressionType, chunk_data: &[T], pool_size: usize)
 where
     T: 'static + std::fmt::Debug + ReflectedType + PartialEq + Default + Sync + Send,
-    N5: N5Writer + Sync + Send + Clone + 'static,
-    SliceDataChunk<T, std::sync::Arc<[T]>>: n5::WriteableDataChunk,
+    Zarr: HierarchyWriter + Sync + Send + Clone + 'static,
+    SliceDataChunk<T, std::sync::Arc<[T]>>: zarr::WriteableDataChunk,
 {
     let chunk_size = smallvec![CHUNK_DIM; 3];
     let data_attrs = DatasetAttributes::new(
@@ -124,11 +124,11 @@ where
         + Send,
     C: compression::Compression,
     CompressionType: std::convert::From<C>,
-    SliceDataChunk<T, std::sync::Arc<[T]>>: n5::WriteableDataChunk,
+    SliceDataChunk<T, std::sync::Arc<[T]>>: zarr::WriteableDataChunk,
 {
-    let dir = tempdir::TempDir::new("rust_n5_integration_tests").unwrap();
+    let dir = tempdir::TempDir::new("rust_zarr_integration_tests").unwrap();
 
-    let n = N5Filesystem::open_or_create(dir.path()).expect("Failed to create N5 filesystem");
+    let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
     let compression = CompressionType::new::<C>();
     // TODO: load the test image data.
     // let chunk_data: Vec<T> = vec![T::default(); (CHUNK_DIM * CHUNK_DIM * CHUNK_DIM) as usize];

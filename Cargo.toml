@@ -1,12 +1,12 @@
 [package]
-name = "n5"
-version = "0.7.6"
+name = "zarr"
+version = "0.0.1"
 edition = "2018"
 license = "MIT/Apache-2.0"
 authors = ["Andrew Champion <andrew.champion@gmail.com>"]
-description = "Rust implementation of the N5 tensor file system format"
+description = "Rust implementation of the Zarr tensor file system format"
 readme = "README.md"
-repository = "https://github.com/aschampion/rust-n5"
+repository = "https://github.com/aschampion/rust-zarr"
 keywords = ["tensor"]
 categories = ["encoding", "filesystem", "science"]
 

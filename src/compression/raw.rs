@@ -28,7 +28,7 @@ mod tests {
     use super::*;
     use crate::compression::CompressionType;
 
-    // Example from the n5 documentation spec.
+    // Example from the zarr documentation spec.
     #[rustfmt::skip]
     const TEST_CHUNK_I16_RAW: [u8; 28] = [
         0x00, 0x00,
