@@ -213,7 +213,7 @@ pub trait HierarchyLister: HierarchyReader {
 pub trait HierarchyWriter: HierarchyReader {
     /// Set a single attribute.
     fn set_attribute<T: Serialize>(
-        &self, // TODO: should this be mut for semantics?
+        &self,
         path_name: &str,
         key: String,
         attribute: T,
@@ -228,7 +228,7 @@ pub trait HierarchyWriter: HierarchyReader {
 
     /// Set a map of attributes.
     fn set_attributes(
-        &self, // TODO: should this be mut for semantics?
+        &self,
         path_name: &str,
         attributes: serde_json::Map<String, serde_json::Value>,
     ) -> Result<(), Error>;

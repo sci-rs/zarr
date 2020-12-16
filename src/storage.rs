@@ -51,23 +51,39 @@ pub trait WriteableStore {
     fn erase_prefix(&self, key_prefix: &str) -> Result<bool, Error>;
 }
 
-fn get_chunk_key(base_path: &str, array_meta: &ArrayMetadata, grid_position: &[u64]) -> String {
+/// TODO
+///
+/// ```
+/// use zarr::prelude::*;
+/// use zarr::storage::get_chunk_key;
+/// use zarr::smallvec::smallvec;
+/// let meta = ArrayMetadata::new(
+///     smallvec![50, 40, 30],
+///     smallvec![11, 10, 10],
+///     DataType::UINT8,
+///     zarr::compression::CompressionType::default(),
+/// );
+/// assert_eq!(get_chunk_key("/foo/baz", &meta, &[0, 0, 0]), "/data/root/foo/baz/c0/0/0");
+/// assert_eq!(get_chunk_key("/foo/baz", &meta, &[1, 2, 3]), "/data/root/foo/baz/c1/2/3");
+///
+/// let meta = ArrayMetadata::new(
+///     smallvec![],
+///     smallvec![],
+///     DataType::UINT8,
+///     zarr::compression::CompressionType::default(),
+/// );
+/// assert_eq!(get_chunk_key("/foo/baz", &meta, &[]), "/data/root/foo/baz/c");
+/// ```
+pub fn get_chunk_key(base_path: &str, array_meta: &ArrayMetadata, grid_position: &[u64]) -> String {
     use std::fmt::Write;
-    // TODO remove allocs and cleanup
-    let mut chunk_key = match grid_position.len() {
-        0 => base_path.to_owned(),
-        _ => format!("{}{}/", crate::DATA_ROOT_PATH, base_path),
-    };
-    write!(
-        chunk_key,
-        "c{}",
-        grid_position
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(&array_meta.chunk_grid.separator)
-    )
-    .unwrap();
+    let mut chunk_key = format!("{}{}/c", crate::DATA_ROOT_PATH, base_path);
+
+    for (i, coord) in grid_position.iter().enumerate() {
+        write!(chunk_key, "{}", coord).unwrap();
+        if i < grid_position.len() - 1 {
+            chunk_key.push_str(&array_meta.chunk_grid.separator)
+        }
+    }
 
     chunk_key
 }
