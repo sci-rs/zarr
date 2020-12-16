@@ -109,7 +109,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
         })
     }
 
-    fn get_array_attributes(&self, path_name: &str) -> Result<ArrayMetadata, Error> {
+    fn get_array_metadata(&self, path_name: &str) -> Result<ArrayMetadata, Error> {
         let array_path = self.array_metadata_key(path_name);
         let value_reader = ReadableStore::get(self, &array_path.to_str().expect("TODO"))?
             .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;

@@ -12,12 +12,7 @@ doc_comment::doctest!("../README.md");
 #[macro_use]
 pub extern crate smallvec;
 
-use std::io::{
-    Error,
-    ErrorKind,
-    Read,
-    Write,
-};
+use std::io::Error;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -88,6 +83,7 @@ fn add_extension(path: &mut std::path::PathBuf, extension: impl AsRef<std::path:
     };
 }
 
+const ENTRY_POINT_KEY: &str = "zarr.json";
 const DATA_ROOT_PATH: &str = "/data/root";
 const META_ROOT_PATH: &str = "/meta/root";
 const ARRAY_METADATA_PATH: &str = ".array";
@@ -157,15 +153,15 @@ pub trait HierarchyReader: Hierarchy {
     /// Get the Zarr specification version of the hierarchy.
     fn get_version(&self) -> Result<VersionReq, Error>;
 
-    /// Get attributes for a array.
-    fn get_array_attributes(&self, path_name: &str) -> Result<ArrayMetadata, Error>;
+    /// Get metadata for an array.
+    fn get_array_metadata(&self, path_name: &str) -> Result<ArrayMetadata, Error>;
 
     /// Test whether a group or array exists.
     fn exists(&self, path_name: &str) -> Result<bool, Error>;
 
     /// Test whether a array exists.
     fn array_exists(&self, path_name: &str) -> Result<bool, Error> {
-        Ok(self.exists(path_name)? && self.get_array_attributes(path_name).is_ok())
+        Ok(self.exists(path_name)? && self.get_array_metadata(path_name).is_ok())
     }
 
     /// Get a URI string for a data chunk.

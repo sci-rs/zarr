@@ -179,7 +179,7 @@ pub(crate) fn create_array<N: ZarrTestable>() {
 
     let read = create.open_reader();
 
-    assert_eq!(read.get_array_attributes("foo/bar").unwrap(), array_meta);
+    assert_eq!(read.get_array_metadata("foo/bar").unwrap(), array_meta);
 }
 
 pub(crate) fn absolute_relative_paths<N: ZarrTestable>() -> Result<()> {
@@ -197,14 +197,14 @@ pub(crate) fn absolute_relative_paths<N: ZarrTestable>() -> Result<()> {
 
     let read = create.open_reader();
 
-    assert_eq!(read.get_array_attributes("foo/bar")?, array_meta);
+    assert_eq!(read.get_array_metadata("foo/bar")?, array_meta);
     assert!(read.exists("/foo/bar")?);
-    assert_eq!(read.get_array_attributes("/foo/bar")?, array_meta);
+    assert_eq!(read.get_array_metadata("/foo/bar")?, array_meta);
     assert!(read.array_exists("/foo/bar")?);
     // Repeated slashes are combined in Rust, not roots.
     assert!(!read.exists("/foo//foo/bar")?);
     assert!(read.exists("/foo//bar")?);
-    assert_eq!(read.get_array_attributes("/foo//bar")?, array_meta);
+    assert_eq!(read.get_array_metadata("/foo//bar")?, array_meta);
     assert!(read.array_exists("/foo//bar")?);
 
     Ok(())

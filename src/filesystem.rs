@@ -9,13 +9,9 @@ use std::io::{
     BufWriter,
     Error,
     ErrorKind,
-    Read,
     Result,
-    Seek,
-    SeekFrom,
 };
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use fs2::FileExt;
 use serde_json::{
@@ -26,35 +22,15 @@ use serde_json::{
 use walkdir::WalkDir;
 
 use crate::{
-    chunk::{
-        DefaultChunkReader,
-        DefaultChunkWriter,
-    },
     storage::{
         ReadableStore,
         WriteableStore,
     },
-    ArrayMetadata,
-    DataChunk,
     EntryPointMetadata,
-    GridCoord,
     Hierarchy,
     HierarchyLister,
     HierarchyReader,
-    HierarchyWriter,
-    ReadableDataChunk,
-    ReflectedType,
-    ReinitDataChunk,
-    StoreNodeMetadata,
-    VecDataChunk,
-    Version,
-    WriteableDataChunk,
 };
-
-// TODO
-const ENTRY_POINT_FILE: &str = "zarr.json";
-/// Name of the attributes file stored in the hierarchy root and array dirs.
-const ATTRIBUTES_FILE: &str = "attributes.json";
 
 /// A filesystem-backed Zarr hierarchy.
 #[derive(Clone, Debug)]
@@ -71,7 +47,7 @@ impl Hierarchy for FilesystemHierarchy {
 
 impl FilesystemHierarchy {
     fn read_entry_point_metadata(base_path: &PathBuf) -> Result<EntryPointMetadata> {
-        let entry_point_path = base_path.join(ENTRY_POINT_FILE);
+        let entry_point_path = base_path.join(crate::ENTRY_POINT_KEY);
         let reader = BufReader::new(File::open(entry_point_path)?);
         Ok(serde_json::from_reader(reader)?)
     }
@@ -100,7 +76,7 @@ impl FilesystemHierarchy {
     /// Note this will update the version attribute for existing hierarchys.
     pub fn open_or_create<P: AsRef<std::path::Path>>(base_path: P) -> Result<FilesystemHierarchy> {
         let base_path = PathBuf::from(base_path.as_ref());
-        let entry_point_path = base_path.join(ENTRY_POINT_FILE);
+        let entry_point_path = base_path.join(crate::ENTRY_POINT_KEY);
 
         let entry_point_metadata = if entry_point_path.exists() {
             Self::read_entry_point_metadata(&base_path)?
@@ -133,26 +109,30 @@ impl FilesystemHierarchy {
         Ok(reader)
     }
 
-    pub fn get_attributes(&self, path_name: &str) -> Result<Value> {
-        let path = self.get_path(path_name)?;
-        if path.is_dir() {
-            let attr_path = path.join(ATTRIBUTES_FILE);
-
-            if attr_path.exists() && attr_path.is_file() {
-                let file = File::open(attr_path)?;
-                file.lock_shared()?;
-                let reader = BufReader::new(file);
-                Ok(serde_json::from_reader(reader)?)
-            } else {
-                Ok(json!({}))
-            }
+    pub fn get_attributes(&self, key: &str) -> Result<Value> {
+        // TODO: no longer used, but should be adapted for getting array/group user attributes
+        let path = self.get_path(key)?;
+        if path.exists() && path.is_file() {
+            let file = File::open(path)?;
+            file.lock_shared()?;
+            let reader = BufReader::new(file);
+            Ok(serde_json::from_reader(reader)?)
         } else {
-            Err(Error::new(ErrorKind::NotFound, "Path does not exist"))
+            let mut path = path;
+            // TODO
+            path.set_extension("");
+            path.set_extension("");
+            // Check for implicit group.
+            if path.exists() && path.is_file() {
+                Ok(json!({}))
+            } else {
+                Err(Error::new(ErrorKind::NotFound, "Path does not exist"))
+            }
         }
     }
 
-    /// Get the filesystem path for a given Zarr data path.
-    fn get_path(&self, path_name: &str) -> Result<PathBuf> {
+    /// Get the filesystem path for a given Zarr key.
+    fn get_path(&self, key: &str) -> Result<PathBuf> {
         // Note: cannot use `canonicalize` on both the constructed array path
         // and `base_path` and check `starts_with`, because `canonicalize` also
         // requires the path exist.
@@ -162,7 +142,7 @@ impl FilesystemHierarchy {
         };
 
         // Normalize the path to be relative.
-        let mut components = Path::new(path_name).components();
+        let mut components = Path::new(key).components();
         while components.as_path().has_root() {
             match components.next() {
                 Some(Component::Prefix(_)) => {
@@ -209,12 +189,6 @@ impl FilesystemHierarchy {
         }
         Ok(path)
     }
-
-    fn get_attributes_path(&self, path_name: &str) -> Result<PathBuf> {
-        let mut path = self.get_path(path_name)?;
-        path.push(ATTRIBUTES_FILE);
-        Ok(path)
-    }
 }
 
 impl ReadableStore for FilesystemHierarchy {
@@ -236,122 +210,6 @@ impl ReadableStore for FilesystemHierarchy {
         }
     }
 }
-
-// impl HierarchyReader for FilesystemHierarchy {
-//     fn get_version(&self) -> Result<Version> {
-//         // TODO: dedicated error type should clean this up.
-//         Ok(Version::from_str(
-//             self.get_attributes("")?
-//                 .get(crate::VERSION_ATTRIBUTE_KEY)
-//                 .ok_or_else(|| Error::new(ErrorKind::NotFound, "Version attribute not present"))?
-//                 .as_str()
-//                 .unwrap_or(""),
-//         )
-//         .unwrap())
-//     }
-
-//     fn get_array_attributes(&self, path_name: &str) -> Result<ArrayMetadata> {
-//         let attr_path = self.get_attributes_path(path_name)?;
-//         let reader = BufReader::new(File::open(attr_path)?);
-//         Ok(serde_json::from_reader(reader)?)
-//     }
-
-//     fn exists(&self, path_name: &str) -> Result<bool> {
-//         let target = self.get_path(path_name)?;
-//         Ok(target.is_dir())
-//     }
-
-//     fn get_chunk_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String> {
-//         self.get_data_chunk_path(path_name, grid_position)?
-//             .to_str()
-//             // TODO: could use URL crate and `from_file_path` here.
-//             .map(|s| format!("file://{}", s))
-//             .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Paths must be UTF-8"))
-//     }
-
-//     fn read_chunk<T>(
-//         &self,
-//         path_name: &str,
-//         array_meta: &ArrayMetadata,
-//         grid_position: GridCoord,
-//     ) -> Result<Option<VecDataChunk<T>>>
-//     where
-//         VecDataChunk<T>: DataChunk<T> + ReadableDataChunk,
-//         T: ReflectedType,
-//     {
-//         let chunk_file = self.get_data_chunk_path(path_name, &grid_position)?;
-//         if chunk_file.is_file() {
-//             let file = File::open(chunk_file)?;
-//             file.lock_shared()?;
-//             let reader = BufReader::new(file);
-//             Ok(Some(
-//                 <crate::DefaultChunk as DefaultChunkReader<T, _>>::read_chunk(
-//                     reader,
-//                     array_meta,
-//                     grid_position,
-//                 )?,
-//             ))
-//         } else {
-//             Ok(None)
-//         }
-//     }
-
-//     fn read_chunk_into<
-//         T: ReflectedType,
-//         B: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
-//     >(
-//         &self,
-//         path_name: &str,
-//         array_meta: &ArrayMetadata,
-//         grid_position: GridCoord,
-//         chunk: &mut B,
-//     ) -> Result<Option<()>> {
-//         let chunk_file = self.get_data_chunk_path(path_name, &grid_position)?;
-//         if chunk_file.is_file() {
-//             let file = File::open(chunk_file)?;
-//             file.lock_shared()?;
-//             let reader = BufReader::new(file);
-//             <crate::DefaultChunk as DefaultChunkReader<T, _>>::read_chunk_into(
-//                 reader,
-//                 array_meta,
-//                 grid_position,
-//                 chunk,
-//             )?;
-//             Ok(Some(()))
-//         } else {
-//             Ok(None)
-//         }
-//     }
-
-//     fn chunk_metadata(
-//         &self,
-//         path_name: &str,
-//         _array_meta: &ArrayMetadata,
-//         grid_position: &[u64],
-//     ) -> Result<Option<DataChunkMetadata>> {
-//         let chunk_file = self.get_data_chunk_path(path_name, grid_position)?;
-//         if chunk_file.is_file() {
-//             let metadata = std::fs::metadata(chunk_file)?;
-//             Ok(Some(DataChunkMetadata {
-//                 created: metadata.created().ok(),
-//                 accessed: metadata.accessed().ok(),
-//                 modified: metadata.modified().ok(),
-//                 size: Some(metadata.len()),
-//             }))
-//         } else {
-//             Ok(None)
-//         }
-//     }
-
-//     // TODO: dupe with get_attributes w/ different empty behaviors
-//     fn list_attributes(&self, path_name: &str) -> Result<Value> {
-//         let attr_path = self.get_attributes_path(path_name)?;
-//         let file = File::open(attr_path)?;
-//         file.lock_shared()?;
-//         let reader = BufReader::new(file);
-//         Ok(serde_json::from_reader(reader)?)
-//     }
-// }
 
 impl HierarchyLister for FilesystemHierarchy {
     fn list(&self, path_name: &str) -> Result<Vec<String>> {
@@ -447,95 +305,6 @@ impl WriteableStore for FilesystemHierarchy {
     }
 }
 
-// impl HierarchyWriter for FilesystemHierarchy {
-//     fn set_attributes(
-//         &self,
-//         path_name: &str,
-//         attributes: serde_json::Map<String, Value>,
-//     ) -> Result<()> {
-//         let mut file = fs::OpenOptions::new()
-//             .read(true)
-//             .write(true)
-//             .create(true)
-//             .open(self.get_attributes_path(path_name)?)?;
-//         file.lock_exclusive()?;
-
-//         let mut existing_buf = String::new();
-//         file.read_to_string(&mut existing_buf)?;
-//         let existing = serde_json::from_str(&existing_buf).unwrap_or_else(|_| json!({}));
-//         let mut merged = existing.clone();
-
-//         merge_top_level(&mut merged, attributes);
-
-//         if merged != existing {
-//             file.set_len(0)?;
-//             file.seek(SeekFrom::Start(0))?;
-//             let writer = BufWriter::new(file);
-//             serde_json::to_writer(writer, &merged)?;
-//         }
-
-//         Ok(())
-//     }
-
-//     fn create_group(&self, path_name: &str) -> Result<()> {
-//         let path = self.get_path(path_name)?;
-//         fs::create_dir_all(path)
-//     }
-
-//     fn remove(&self, path_name: &str) -> Result<()> {
-//         let path = self.get_path(path_name)?;
-
-//         for entry in WalkDir::new(path).contents_first(true) {
-//             let entry = entry?;
-
-//             if entry.file_type().is_dir() {
-//                 fs::remove_dir(entry.path())?;
-//             } else {
-//                 let file = File::open(entry.path())?;
-//                 file.lock_exclusive()?;
-//                 fs::remove_file(entry.path())?;
-//             }
-//         }
-
-//         Ok(())
-//     }
-
-//     fn write_chunk<T: ReflectedType, B: DataChunk<T> + WriteableDataChunk>(
-//         &self,
-//         path_name: &str,
-//         array_meta: &ArrayMetadata,
-//         chunk: &B,
-//     ) -> Result<()> {
-//         let path = self.get_data_chunk_path(path_name, chunk.get_grid_position())?;
-//         fs::create_dir_all(path.parent().expect("TODO: root chunk path?"))?;
-
-//         let file = fs::OpenOptions::new()
-//             .read(true)
-//             .write(true)
-//             .create(true)
-//             .open(path)?;
-//         file.lock_exclusive()?;
-//         // Truncate after the lock is acquired, rather than on opening.
-//         file.set_len(0)?;
-
-//         let buffer = BufWriter::new(file);
-//         <crate::DefaultChunk as DefaultChunkWriter<T, _, _>>::write_chunk(buffer, array_meta, chunk)
-//     }
-
-//     // TODO
-//     // fn delete_chunk(&self, path_name: &str, grid_position: &[u64]) -> Result<bool> {
-//     //     let path = self.get_data_chunk_path(path_name, grid_position)?;
-
-//     //     if path.exists() {
-//     //         let file = fs::OpenOptions::new().read(true).open(&path)?;
-//     //         file.lock_exclusive()?;
-//     //         fs::remove_file(&path)?;
-//     //     }
-
-//     //     Ok(!path.exists())
-//     // }
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -543,6 +312,11 @@ mod tests {
     use crate::tests::{
         ContextWrapper,
         ZarrTestable,
+    };
+    use crate::{
+        chunk::DataChunk,
+        ArrayMetadata,
+        HierarchyWriter,
     };
     use tempdir::TempDir;
 
@@ -584,20 +358,21 @@ mod tests {
         assert!(create.get_path("foo/bar/baz/../../../..").is_err());
     }
 
-    #[test]
-    fn accept_hardlink_attributes() {
-        let wrapper = FilesystemHierarchy::temp_new_rw();
-        let dir = TempDir::new("rust_zarr_tests_dupe").unwrap();
-        let mut attr_path = dir.path().to_path_buf();
-        attr_path.push(ATTRIBUTES_FILE);
+    // TODO
+    // #[test]
+    // fn accept_hardlink_attributes() {
+    //     let wrapper = FilesystemHierarchy::temp_new_rw();
+    //     let dir = TempDir::new("rust_zarr_tests_dupe").unwrap();
+    //     let mut attr_path = dir.path().to_path_buf();
+    //     attr_path.push(ATTRIBUTES_FILE);
 
-        std::fs::hard_link(wrapper.zarr.get_attributes_path("").unwrap(), &attr_path).unwrap();
+    //     std::fs::hard_link(wrapper.zarr.get_attributes_path("").unwrap(), &attr_path).unwrap();
 
-        wrapper.zarr.set_attribute("", "foo".into(), "bar").unwrap();
+    //     wrapper.zarr.set_attribute("", "foo".into(), "bar").unwrap();
 
-        let dupe = FilesystemHierarchy::open(dir.path()).unwrap();
-        assert_eq!(dupe.get_attributes("").unwrap()["foo"], "bar");
-    }
+    //     let dupe = FilesystemHierarchy::open(dir.path()).unwrap();
+    //     assert_eq!(dupe.get_attributes("").unwrap()["foo"], "bar");
+    // }
 
     #[test]
     fn list_symlinked_arrays() {
