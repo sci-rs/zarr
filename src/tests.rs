@@ -1,3 +1,8 @@
+use super::chunk::{
+    DefaultChunk,
+    DefaultChunkReader,
+    DefaultChunkWriter,
+};
 use super::*;
 use std::io::{
     Cursor,

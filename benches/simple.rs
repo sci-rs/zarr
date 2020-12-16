@@ -9,19 +9,21 @@ use rand::{
 };
 use test::Bencher;
 
-use zarr::prelude::*;
-use zarr::smallvec::smallvec;
-use zarr::{
+use zarr::chunk::{
     DefaultChunk,
     DefaultChunkReader,
     DefaultChunkWriter,
+    ReadableDataChunk,
+    WriteableDataChunk,
 };
+use zarr::prelude::*;
+use zarr::smallvec::smallvec;
 
 fn test_chunk_compression_rw<T>(compression: compression::CompressionType, b: &mut Bencher)
 where
     T: 'static + std::fmt::Debug + ReflectedType + PartialEq + Default,
     rand::distributions::Standard: rand::distributions::Distribution<T>,
-    VecDataChunk<T>: zarr::ReadableDataChunk + zarr::WriteableDataChunk,
+    VecDataChunk<T>: ReadableDataChunk + WriteableDataChunk,
 {
     let array_meta = ArrayMetadata::new(
         smallvec![1024, 1024, 1024],

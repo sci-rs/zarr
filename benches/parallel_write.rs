@@ -33,6 +33,7 @@ use tiff::decoder::{
     DecodingResult,
 };
 
+use zarr::chunk::WriteableDataChunk;
 use zarr::prelude::*;
 use zarr::smallvec::smallvec;
 
@@ -67,7 +68,7 @@ fn write<T, Zarr>(n: &Zarr, compression: &CompressionType, chunk_data: &[T], poo
 where
     T: 'static + std::fmt::Debug + ReflectedType + PartialEq + Default + Sync + Send,
     Zarr: HierarchyWriter + Sync + Send + Clone + 'static,
-    SliceDataChunk<T, std::sync::Arc<[T]>>: zarr::WriteableDataChunk,
+    SliceDataChunk<T, std::sync::Arc<[T]>>: WriteableDataChunk,
 {
     let chunk_size = smallvec![CHUNK_DIM; 3];
     let array_meta = ArrayMetadata::new(
@@ -124,11 +125,12 @@ where
         + Send,
     C: compression::Compression,
     CompressionType: std::convert::From<C>,
-    SliceDataChunk<T, std::sync::Arc<[T]>>: zarr::WriteableDataChunk,
+    SliceDataChunk<T, std::sync::Arc<[T]>>: WriteableDataChunk,
 {
     let dir = tempdir::TempDir::new("rust_zarr_integration_tests").unwrap();
 
-    let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
+    let n =
+        FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
     let compression = CompressionType::new::<C>();
     // TODO: load the test image data.
     // let chunk_data: Vec<T> = vec![T::default(); (CHUNK_DIM * CHUNK_DIM * CHUNK_DIM) as usize];

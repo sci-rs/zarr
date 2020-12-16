@@ -26,12 +26,14 @@ use serde_json::{
 use walkdir::WalkDir;
 
 use crate::{
+    chunk::{
+        DefaultChunkReader,
+        DefaultChunkWriter,
+    },
     is_version_compatible,
+    ArrayMetadata,
     DataChunk,
     DataChunkMetadata,
-    ArrayMetadata,
-    DefaultChunkReader,
-    DefaultChunkWriter,
     EntryPointMetadata,
     GridCoord,
     Hierarchy,
@@ -543,8 +545,8 @@ mod tests {
 
         fn temp_new_rw() -> Self::Wrapper {
             let dir = TempDir::new("rust_zarr_tests").unwrap();
-            let zarr =
-                FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
+            let zarr = FilesystemHierarchy::open_or_create(dir.path())
+                .expect("Failed to create Zarr filesystem");
 
             ContextWrapper { context: dir, zarr }
         }
@@ -627,8 +629,8 @@ mod tests {
         let dir = TempDir::new("rust_zarr_tests").unwrap();
         let path_str = dir.path().to_str().unwrap();
 
-        let create =
-            FilesystemHierarchy::open_or_create(path_str).expect("Failed to create Zarr filesystem");
+        let create = FilesystemHierarchy::open_or_create(path_str)
+            .expect("Failed to create Zarr filesystem");
         let uri = create.get_chunk_uri("foo/bar", &vec![1, 2, 3]).unwrap();
         assert_eq!(uri, format!("file://{}/foo/bar/1/2/3", path_str));
     }

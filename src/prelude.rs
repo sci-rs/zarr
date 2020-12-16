@@ -19,16 +19,18 @@ pub use crate::compression::{
 pub use crate::filesystem::FilesystemHierarchy;
 #[doc(no_inline)]
 pub use crate::{
+    chunk::{
+        DataChunk,
+        SliceDataChunk,
+        VecDataChunk,
+    },
+    ArrayMetadata,
     ChunkCoord,
-    DataChunk,
     DataChunkMetadata,
     DataType,
-    ArrayMetadata,
     GridCoord,
     HierarchyLister,
     HierarchyReader,
     HierarchyWriter,
     ReflectedType,
-    SliceDataChunk,
-    VecDataChunk,
 };

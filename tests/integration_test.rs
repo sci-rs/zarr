@@ -6,11 +6,14 @@ use smallvec::smallvec;
 
 use zarr::prelude::*;
 
-fn test_read_write<T, Zarr: HierarchyReader + HierarchyWriter>(n: &Zarr, compression: &CompressionType, dim: usize)
-where
+fn test_read_write<T, Zarr: HierarchyReader + HierarchyWriter>(
+    n: &Zarr,
+    compression: &CompressionType,
+    dim: usize,
+) where
     T: 'static + std::fmt::Debug + ReflectedType + PartialEq + Default,
     rand::distributions::Standard: rand::distributions::Distribution<T>,
-    VecDataChunk<T>: zarr::ReadableDataChunk + zarr::WriteableDataChunk,
+    VecDataChunk<T>: zarr::chunk::ReadableDataChunk + zarr::chunk::WriteableDataChunk,
 {
     let chunk_size: ChunkCoord = (1..=dim as u32).rev().map(|d| d * 5).collect();
     let array_meta = ArrayMetadata::new(
@@ -49,7 +52,11 @@ where
     n.remove(path_name).unwrap();
 }
 
-fn test_all_types<Zarr: HierarchyReader + HierarchyWriter>(n: &Zarr, compression: &CompressionType, dim: usize) {
+fn test_all_types<Zarr: HierarchyReader + HierarchyWriter>(
+    n: &Zarr,
+    compression: &CompressionType,
+    dim: usize,
+) {
     test_read_write::<u8, _>(n, compression, dim);
     test_read_write::<u16, _>(n, compression, dim);
     test_read_write::<u32, _>(n, compression, dim);
@@ -65,7 +72,8 @@ fn test_all_types<Zarr: HierarchyReader + HierarchyWriter>(n: &Zarr, compression
 fn test_zarr_filesystem_dim(dim: usize) {
     let dir = tempdir::TempDir::new("rust_zarr_integration_tests").unwrap();
 
-    let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
+    let n =
+        FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
     test_all_types(
         &n,
         &CompressionType::Raw(compression::raw::RawCompression::default()),
@@ -116,6 +124,7 @@ fn test_all_compressions<Zarr: HierarchyReader + HierarchyWriter>(n: &Zarr) {
 fn test_zarr_filesystem_compressions() {
     let dir = tempdir::TempDir::new("rust_zarr_integration_tests").unwrap();
 
-    let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
+    let n =
+        FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
     test_all_compressions(&n)
 }

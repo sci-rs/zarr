@@ -3,7 +3,7 @@ use serde::{
     Serialize,
 };
 
-use crate::ChunkHeader;
+use crate::chunk::ChunkHeader;
 use crate::VecDataChunk;
 
 /// Data types representable in Zarr.

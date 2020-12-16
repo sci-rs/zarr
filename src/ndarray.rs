@@ -15,10 +15,10 @@ use ndarray::{
 };
 
 use crate::{
+    ArrayMetadata,
     ChunkCoord,
     CoordVec,
     DataChunk,
-    ArrayMetadata,
     GridCoord,
     HierarchyReader,
     HierarchyWriter,
@@ -416,7 +416,7 @@ impl ArrayMetadata {
         }
     }
 
-    pub fn get_chunk_bounds(&self, coord: &GridCoord) -> BoundingBox {
+    pub fn get_chunk_bounds(&self, coord: &[u64]) -> BoundingBox {
         let mut size: GridCoord = self
             .get_chunk_size()
             .iter()
@@ -432,12 +432,12 @@ impl ArrayMetadata {
     }
 }
 
-impl<T: ReflectedType, C> SliceDataChunk<T, C> {
+impl<T: ReflectedType, C: AsRef<[T]>> SliceDataChunk<T, C> {
     /// Get the bounding box of the occupied extent of this chunk, which may
     /// be smaller than the nominal bounding box expected from the array.
     pub fn get_bounds(&self, array_meta: &ArrayMetadata) -> BoundingBox {
-        let mut bbox = array_meta.get_chunk_bounds(&self.grid_position);
-        bbox.size = self.size.iter().cloned().map(u64::from).collect();
+        let mut bbox = array_meta.get_chunk_bounds(self.get_grid_position());
+        bbox.size = self.get_size().iter().cloned().map(u64::from).collect();
         bbox
     }
 }
