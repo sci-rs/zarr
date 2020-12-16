@@ -60,7 +60,7 @@ pub use semver::{
 
 const COORD_SMALLVEC_SIZE: usize = 6;
 pub type CoordVec<T> = SmallVec<[T; COORD_SMALLVEC_SIZE]>;
-pub type BlockCoord = CoordVec<u32>;
+pub type ChunkCoord = CoordVec<u32>;
 pub type GridCoord = CoordVec<u64>;
 
 type N5Endian = BigEndian;
@@ -100,13 +100,13 @@ const META_ROOT_PATH: &str = "/meta/root";
 const ARRAY_METADATA_PATH: &str = ".array";
 const GROUP_METADATA_PATH: &str = ".group";
 
-/// Container metadata about a data block.
+/// Container metadata about a data chunk.
 ///
 /// This is metadata from the persistence layer of the container, such as
 /// filesystem access times and on-disk sizes, and is not to be confused with
 /// semantic metadata stored as attributes in the container.
 #[derive(Clone, Debug)]
-pub struct DataBlockMetadata {
+pub struct DataChunkMetadata {
     pub created: Option<SystemTime>,
     pub accessed: Option<SystemTime>,
     pub modified: Option<SystemTime>,
@@ -193,40 +193,40 @@ pub trait N5Reader: Hierarchy {
         Ok(self.exists(path_name)? && self.get_dataset_attributes(path_name).is_ok())
     }
 
-    /// Get a URI string for a data block.
+    /// Get a URI string for a data chunk.
     ///
-    /// Whether this requires that the dataset and block exist is currently
+    /// Whether this requires that the dataset and chunk exist is currently
     /// implementation dependent. Whether this URI is a URL is implementation
     /// dependent.
-    fn get_block_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String, Error>;
+    fn get_chunk_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String, Error>;
 
-    /// Read a single dataset block into a linear vec.
-    fn read_block<T>(
+    /// Read a single dataset chunk into a linear vec.
+    fn read_chunk<T>(
         &self,
         path_name: &str,
         data_attrs: &DatasetAttributes,
         grid_position: GridCoord,
-    ) -> Result<Option<VecDataBlock<T>>, Error>
+    ) -> Result<Option<VecDataChunk<T>>, Error>
     where
-        VecDataBlock<T>: DataBlock<T> + ReadableDataBlock,
+        VecDataChunk<T>: DataChunk<T> + ReadableDataChunk,
         T: ReflectedType;
 
-    /// Read a single dataset block into an existing buffer.
-    fn read_block_into<T: ReflectedType, B: DataBlock<T> + ReinitDataBlock<T> + ReadableDataBlock>(
+    /// Read a single dataset chunk into an existing buffer.
+    fn read_chunk_into<T: ReflectedType, B: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk>(
         &self,
         path_name: &str,
         data_attrs: &DatasetAttributes,
         grid_position: GridCoord,
-        block: &mut B,
+        chunk: &mut B,
     ) -> Result<Option<()>, Error>;
 
-    /// Read metadata about a block.
-    fn block_metadata(
+    /// Read metadata about a chunk.
+    fn chunk_metadata(
         &self,
         path_name: &str,
         data_attrs: &DatasetAttributes,
         grid_position: &[u64],
-    ) -> Result<Option<DataBlockMetadata>, Error>;
+    ) -> Result<Option<DataChunkMetadata>, Error>;
 
     /// List all attributes of a group.
     fn list_attributes(&self, path_name: &str) -> Result<serde_json::Value, Error>;
@@ -276,33 +276,33 @@ impl<S: ReadableStore + Hierarchy> N5Reader for S {
         )
     }
 
-    fn get_block_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String, Error> {
+    fn get_chunk_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String, Error> {
         todo!()
     }
 
-    fn read_block<T>(
+    fn read_chunk<T>(
         &self,
         path_name: &str,
         data_attrs: &DatasetAttributes,
         grid_position: GridCoord,
-    ) -> Result<Option<VecDataBlock<T>>, Error>
+    ) -> Result<Option<VecDataChunk<T>>, Error>
     where
-        VecDataBlock<T>: DataBlock<T> + ReadableDataBlock,
+        VecDataChunk<T>: DataChunk<T> + ReadableDataChunk,
         T: ReflectedType,
     {
         // TODO convert asserts to errors
         assert!(data_attrs.in_bounds(&grid_position));
 
-        // Construct block path string
-        let block_key = get_block_key(path_name, data_attrs, &grid_position);
+        // Construct chunk path string
+        let chunk_key = get_chunk_key(path_name, data_attrs, &grid_position);
 
         // Get key from store
-        let value_reader = ReadableStore::get(self, &block_key)?;
+        let value_reader = ReadableStore::get(self, &chunk_key)?;
 
         // Read value into container
         value_reader
             .map(|reader| {
-                <crate::DefaultBlock as DefaultBlockReader<T, _>>::read_block(
+                <crate::DefaultChunk as DefaultChunkReader<T, _>>::read_chunk(
                     reader,
                     data_attrs,
                     grid_position,
@@ -311,44 +311,44 @@ impl<S: ReadableStore + Hierarchy> N5Reader for S {
             .transpose()
     }
 
-    fn read_block_into<
+    fn read_chunk_into<
         T: ReflectedType,
-        B: DataBlock<T> + ReinitDataBlock<T> + ReadableDataBlock,
+        B: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
     >(
         &self,
         path_name: &str,
         data_attrs: &DatasetAttributes,
         grid_position: GridCoord,
-        block: &mut B,
+        chunk: &mut B,
     ) -> Result<Option<()>, Error> {
         // TODO convert asserts to errors
         assert!(data_attrs.in_bounds(&grid_position));
 
-        // Construct block path string
-        let block_key = get_block_key(path_name, data_attrs, &grid_position);
+        // Construct chunk path string
+        let chunk_key = get_chunk_key(path_name, data_attrs, &grid_position);
 
         // Get key from store
-        let value_reader = ReadableStore::get(self, &block_key)?;
+        let value_reader = ReadableStore::get(self, &chunk_key)?;
 
         // Read value into container
         value_reader
             .map(|reader| {
-                <crate::DefaultBlock as DefaultBlockReader<T, _>>::read_block_into(
+                <crate::DefaultChunk as DefaultChunkReader<T, _>>::read_chunk_into(
                     reader,
                     data_attrs,
                     grid_position,
-                    block,
+                    chunk,
                 )
             })
             .transpose()
     }
 
-    fn block_metadata(
+    fn chunk_metadata(
         &self,
         path_name: &str,
         data_attrs: &DatasetAttributes,
         grid_position: &[u64],
-    ) -> Result<Option<DataBlockMetadata>, Error> {
+    ) -> Result<Option<DataChunkMetadata>, Error> {
         todo!()
     }
 
@@ -373,15 +373,15 @@ impl<S: ReadableStore + Hierarchy> N5Reader for S {
     }
 }
 
-fn get_block_key(base_path: &str, data_attrs: &DatasetAttributes, grid_position: &[u64]) -> String {
+fn get_chunk_key(base_path: &str, data_attrs: &DatasetAttributes, grid_position: &[u64]) -> String {
     use std::fmt::Write;
     // TODO remove allocs and cleanup
-    let mut block_key = match grid_position.len() {
+    let mut chunk_key = match grid_position.len() {
         0 => base_path.to_owned(),
         _ => format!("{}{}/", DATA_ROOT_PATH, base_path),
     };
     write!(
-        block_key,
+        chunk_key,
         "c{}",
         grid_position
             .iter()
@@ -391,7 +391,7 @@ fn get_block_key(base_path: &str, data_attrs: &DatasetAttributes, grid_position:
     )
     .unwrap();
 
-    block_key
+    chunk_key
 }
 
 /// Non-mutating operations on N5 containers that support group discoverability.
@@ -441,7 +441,7 @@ pub trait N5Writer: N5Reader {
     fn create_group(&self, path_name: &str) -> Result<(), Error>;
 
     /// Create a dataset. This will create the dataset group and attributes,
-    /// but not populate any block data.
+    /// but not populate any chunk data.
     fn create_dataset(&self, path_name: &str, data_attrs: &DatasetAttributes) -> Result<(), Error>;
 
     /// Remove the N5 container.
@@ -454,18 +454,18 @@ pub trait N5Writer: N5Reader {
     /// This will wait on locks acquired by other writers or readers.
     fn remove(&self, path_name: &str) -> Result<(), Error>;
 
-    fn write_block<T: ReflectedType, B: DataBlock<T> + WriteableDataBlock>(
+    fn write_chunk<T: ReflectedType, B: DataChunk<T> + WriteableDataChunk>(
         &self,
         path_name: &str,
         data_attrs: &DatasetAttributes,
-        block: &B,
+        chunk: &B,
     ) -> Result<(), Error>;
 
-    /// Delete a block from a dataset.
+    /// Delete a chunk from a dataset.
     ///
-    /// Returns `true` if the block does not exist on the backend at the
+    /// Returns `true` if the chunk does not exist on the backend at the
     /// completion of the call.
-    fn delete_block(
+    fn delete_chunk(
         &self,
         path_name: &str,
         data_attrs: &DatasetAttributes,
@@ -573,28 +573,28 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> N5Writer for S {
         self.delete(path_name).map(|_| ())
     }
 
-    fn write_block<T: ReflectedType, B: DataBlock<T> + WriteableDataBlock>(
+    fn write_chunk<T: ReflectedType, B: DataChunk<T> + WriteableDataChunk>(
         &self,
         path_name: &str,
         data_attrs: &DatasetAttributes,
-        block: &B,
+        chunk: &B,
     ) -> Result<(), Error> {
         // TODO convert assert
-        // assert!(data_attrs.in_bounds(block.get_grid_position()));
-        let block_key = get_block_key(path_name, data_attrs, block.get_grid_position());
-        self.set(&block_key, |writer| {
-            <DefaultBlock as DefaultBlockWriter<T, _, _>>::write_block(writer, data_attrs, block)
+        // assert!(data_attrs.in_bounds(chunk.get_grid_position()));
+        let chunk_key = get_chunk_key(path_name, data_attrs, chunk.get_grid_position());
+        self.set(&chunk_key, |writer| {
+            <DefaultChunk as DefaultChunkWriter<T, _, _>>::write_chunk(writer, data_attrs, chunk)
         })
     }
 
-    fn delete_block(
+    fn delete_chunk(
         &self,
         path_name: &str,
         data_attrs: &DatasetAttributes,
         grid_position: &[u64],
     ) -> Result<bool, Error> {
-        let block_key = get_block_key(path_name, data_attrs, grid_position);
-        self.delete(&block_key)
+        let chunk_key = get_chunk_key(path_name, data_attrs, grid_position);
+        self.delete(&chunk_key)
     }
 }
 
@@ -627,7 +627,7 @@ pub struct DatasetAttributes {
     dimensions: GridCoord,
     /// Element data type.
     data_type: DataType,
-    /// Compression scheme for voxel data in each block.
+    /// Compression scheme for voxel data in each chunk.
     compression: compression::CompressionType,
     /// TODO
     chunk_grid: ChunkGridMetadata,
@@ -636,8 +636,8 @@ pub struct DatasetAttributes {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ChunkGridMetadata {
-    /// Size of each block, in voxels.
-    block_size: BlockCoord,
+    /// Size of each chunk, in voxels.
+    chunk_size: ChunkCoord,
     /// TODO
     chunk_separator: String,
 }
@@ -645,14 +645,14 @@ pub struct ChunkGridMetadata {
 impl DatasetAttributes {
     pub fn new(
         dimensions: GridCoord,
-        block_size: BlockCoord,
+        chunk_size: ChunkCoord,
         data_type: DataType,
         compression: compression::CompressionType,
     ) -> DatasetAttributes {
         assert_eq!(
             dimensions.len(),
-            block_size.len(),
-            "Number of dataset dimensions must match number of block size dimensions."
+            chunk_size.len(),
+            "Number of dataset dimensions must match number of chunk size dimensions."
         );
         DatasetAttributes {
             dimensions,
@@ -660,7 +660,7 @@ impl DatasetAttributes {
             compression,
             // TODO
             chunk_grid: ChunkGridMetadata {
-                block_size,
+                chunk_size,
                 chunk_separator: "/".to_owned(),
             },
         }
@@ -670,8 +670,8 @@ impl DatasetAttributes {
         &self.dimensions
     }
 
-    pub fn get_block_size(&self) -> &[u32] {
-        &self.chunk_grid.block_size
+    pub fn get_chunk_size(&self) -> &[u32] {
+        &self.chunk_grid.chunk_size
     }
 
     pub fn get_data_type(&self) -> &DataType {
@@ -691,10 +691,10 @@ impl DatasetAttributes {
         self.dimensions.iter().map(|&d| d as usize).product()
     }
 
-    /// Get the total number of elements possible in a block.
-    pub fn get_block_num_elements(&self) -> usize {
+    /// Get the total number of elements possible in a chunk.
+    pub fn get_chunk_num_elements(&self) -> usize {
         self.chunk_grid
-            .block_size
+            .chunk_size
             .iter()
             .map(|&d| d as usize)
             .product()
@@ -704,12 +704,12 @@ impl DatasetAttributes {
     pub fn get_grid_extent(&self) -> GridCoord {
         self.dimensions
             .iter()
-            .zip(self.chunk_grid.block_size.iter().cloned().map(u64::from))
+            .zip(self.chunk_grid.chunk_size.iter().cloned().map(u64::from))
             .map(|(d, b)| u64_ceil_div(*d, b))
             .collect()
     }
 
-    /// Get the total number of blocks.
+    /// Get the total number of chunks.
     /// ```
     /// use n5::prelude::*;
     /// use n5::smallvec::smallvec;
@@ -719,13 +719,13 @@ impl DatasetAttributes {
     ///     DataType::UINT8,
     ///     n5::compression::CompressionType::default(),
     /// );
-    /// assert_eq!(attrs.get_num_blocks(), 60);
+    /// assert_eq!(attrs.get_num_chunks(), 60);
     /// ```
-    pub fn get_num_blocks(&self) -> u64 {
+    pub fn get_num_chunks(&self) -> u64 {
         self.get_grid_extent().iter().product()
     }
 
-    /// Check whether a block grid position is in the bounds of this dataset.
+    /// Check whether a chunk grid position is in the bounds of this dataset.
     /// ```
     /// use n5::prelude::*;
     /// use n5::smallvec::smallvec;
@@ -748,44 +748,44 @@ impl DatasetAttributes {
     }
 }
 
-/// Unencoded, non-payload header of a data block.
+/// Unencoded, non-payload header of a data chunk.
 #[derive(Debug)]
-pub struct BlockHeader {
-    size: BlockCoord,
+pub struct ChunkHeader {
+    size: ChunkCoord,
     grid_position: GridCoord,
     num_el: usize,
 }
 
-/// Traits for data blocks that can be reused as a different blocks after
+/// Traits for data chunks that can be reused as a different chunks after
 /// construction.
-pub trait ReinitDataBlock<T> {
-    /// Reinitialize this data block with a new header, reallocating as
+pub trait ReinitDataChunk<T> {
+    /// Reinitialize this data chunk with a new header, reallocating as
     /// necessary.
-    fn reinitialize(&mut self, header: BlockHeader);
+    fn reinitialize(&mut self, header: ChunkHeader);
 
-    /// Reinitialize this data block with the header and data of another block.
-    fn reinitialize_with<B: DataBlock<T>>(&mut self, other: &B);
+    /// Reinitialize this data chunk with the header and data of another chunk.
+    fn reinitialize_with<B: DataChunk<T>>(&mut self, other: &B);
 }
 
-/// Traits for data blocks that can read in data.
-pub trait ReadableDataBlock {
-    /// Read data into this block from a source, overwriting any existing data.
+/// Traits for data chunks that can read in data.
+pub trait ReadableDataChunk {
+    /// Read data into this chunk from a source, overwriting any existing data.
     ///
-    /// Unlike Java N5, read the stream directly into the block data instead
+    /// Unlike Java N5, read the stream directly into the chunk data instead
     /// of creating a copied byte buffer.
     fn read_data<R: std::io::Read>(&mut self, source: R) -> std::io::Result<()>;
 }
 
-/// Traits for data blocks that can write out data.
-pub trait WriteableDataBlock {
-    /// Write the data from this block into a target.
+/// Traits for data chunks that can write out data.
+pub trait WriteableDataChunk {
+    /// Write the data from this chunk into a target.
     fn write_data<W: std::io::Write>(&self, target: W) -> std::io::Result<()>;
 }
 
-/// Common interface for data blocks of element (rust) type `T`.
+/// Common interface for data chunks of element (rust) type `T`.
 ///
 /// To enable custom types to be written to N5 volumes, implement this trait.
-pub trait DataBlock<T> {
+pub trait DataChunk<T> {
     fn get_size(&self) -> &[u32];
 
     fn get_grid_position(&self) -> &[u64];
@@ -794,8 +794,8 @@ pub trait DataBlock<T> {
 
     fn get_num_elements(&self) -> u32;
 
-    fn get_header(&self) -> BlockHeader {
-        BlockHeader {
+    fn get_header(&self) -> ChunkHeader {
+        ChunkHeader {
             size: self.get_size().into(),
             grid_position: self.get_grid_position().into(),
             num_el: self.get_num_elements() as usize,
@@ -803,23 +803,23 @@ pub trait DataBlock<T> {
     }
 }
 
-/// A generic data block container wrapping any type that can be taken as a
+/// A generic data chunk container wrapping any type that can be taken as a
 /// slice ref.
 #[derive(Clone, Debug)]
-pub struct SliceDataBlock<T: ReflectedType, C> {
+pub struct SliceDataChunk<T: ReflectedType, C> {
     data_type: PhantomData<T>,
-    size: BlockCoord,
+    size: ChunkCoord,
     grid_position: GridCoord,
     data: C,
 }
 
-/// A linear vector storing a data block. All read data blocks are returned as
+/// A linear vector storing a data chunk. All read data chunks are returned as
 /// this type.
-pub type VecDataBlock<T> = SliceDataBlock<T, Vec<T>>;
+pub type VecDataChunk<T> = SliceDataChunk<T, Vec<T>>;
 
-impl<T: ReflectedType, C> SliceDataBlock<T, C> {
-    pub fn new(size: BlockCoord, grid_position: GridCoord, data: C) -> SliceDataBlock<T, C> {
-        SliceDataBlock {
+impl<T: ReflectedType, C> SliceDataChunk<T, C> {
+    pub fn new(size: ChunkCoord, grid_position: GridCoord, data: C) -> SliceDataChunk<T, C> {
+        SliceDataChunk {
             data_type: PhantomData,
             size,
             grid_position,
@@ -832,14 +832,14 @@ impl<T: ReflectedType, C> SliceDataBlock<T, C> {
     }
 }
 
-impl<T: ReflectedType> ReinitDataBlock<T> for VecDataBlock<T> {
-    fn reinitialize(&mut self, header: BlockHeader) {
+impl<T: ReflectedType> ReinitDataChunk<T> for VecDataChunk<T> {
+    fn reinitialize(&mut self, header: ChunkHeader) {
         self.size = header.size;
         self.grid_position = header.grid_position;
         self.data.resize_with(header.num_el, Default::default);
     }
 
-    fn reinitialize_with<B: DataBlock<T>>(&mut self, other: &B) {
+    fn reinitialize_with<B: DataChunk<T>>(&mut self, other: &B) {
         self.size = other.get_size().into();
         self.grid_position = other.get_grid_position().into();
         self.data.clear();
@@ -847,15 +847,15 @@ impl<T: ReflectedType> ReinitDataBlock<T> for VecDataBlock<T> {
     }
 }
 
-macro_rules! vec_data_block_impl {
+macro_rules! vec_data_chunk_impl {
     ($ty_name:ty, $bo_read_fn:ident, $bo_write_fn:ident) => {
-        impl<C: AsMut<[$ty_name]>> ReadableDataBlock for SliceDataBlock<$ty_name, C> {
+        impl<C: AsMut<[$ty_name]>> ReadableDataChunk for SliceDataChunk<$ty_name, C> {
             fn read_data<R: std::io::Read>(&mut self, mut source: R) -> std::io::Result<()> {
                 source.$bo_read_fn::<N5Endian>(self.data.as_mut())
             }
         }
 
-        impl<C: AsRef<[$ty_name]>> WriteableDataBlock for SliceDataBlock<$ty_name, C> {
+        impl<C: AsRef<[$ty_name]>> WriteableDataChunk for SliceDataChunk<$ty_name, C> {
             fn write_data<W: std::io::Write>(&self, mut target: W) -> std::io::Result<()> {
                 const CHUNK: usize = 256;
                 let mut buf: [u8; CHUNK * std::mem::size_of::<$ty_name>()] =
@@ -882,29 +882,29 @@ trait ReadBytesExtI8: ReadBytesExt {
 }
 impl<T: ReadBytesExt> ReadBytesExtI8 for T {}
 
-vec_data_block_impl!(u16, read_u16_into, write_u16_into);
-vec_data_block_impl!(u32, read_u32_into, write_u32_into);
-vec_data_block_impl!(u64, read_u64_into, write_u64_into);
-vec_data_block_impl!(i8, read_i8_into_wrapper, write_i8_into);
-vec_data_block_impl!(i16, read_i16_into, write_i16_into);
-vec_data_block_impl!(i32, read_i32_into, write_i32_into);
-vec_data_block_impl!(i64, read_i64_into, write_i64_into);
-vec_data_block_impl!(f32, read_f32_into, write_f32_into);
-vec_data_block_impl!(f64, read_f64_into, write_f64_into);
+vec_data_chunk_impl!(u16, read_u16_into, write_u16_into);
+vec_data_chunk_impl!(u32, read_u32_into, write_u32_into);
+vec_data_chunk_impl!(u64, read_u64_into, write_u64_into);
+vec_data_chunk_impl!(i8, read_i8_into_wrapper, write_i8_into);
+vec_data_chunk_impl!(i16, read_i16_into, write_i16_into);
+vec_data_chunk_impl!(i32, read_i32_into, write_i32_into);
+vec_data_chunk_impl!(i64, read_i64_into, write_i64_into);
+vec_data_chunk_impl!(f32, read_f32_into, write_f32_into);
+vec_data_chunk_impl!(f64, read_f64_into, write_f64_into);
 
-impl<C: AsMut<[u8]>> ReadableDataBlock for SliceDataBlock<u8, C> {
+impl<C: AsMut<[u8]>> ReadableDataChunk for SliceDataChunk<u8, C> {
     fn read_data<R: std::io::Read>(&mut self, mut source: R) -> std::io::Result<()> {
         source.read_exact(self.data.as_mut())
     }
 }
 
-impl<C: AsRef<[u8]>> WriteableDataBlock for SliceDataBlock<u8, C> {
+impl<C: AsRef<[u8]>> WriteableDataChunk for SliceDataChunk<u8, C> {
     fn write_data<W: std::io::Write>(&self, mut target: W) -> std::io::Result<()> {
         target.write_all(self.data.as_ref())
     }
 }
 
-impl<T: ReflectedType, C: AsRef<[T]>> DataBlock<T> for SliceDataBlock<T, C> {
+impl<T: ReflectedType, C: AsRef<[T]>> DataChunk<T> for SliceDataChunk<T, C> {
     fn get_size(&self) -> &[u32] {
         &self.size
     }
@@ -922,22 +922,22 @@ impl<T: ReflectedType, C: AsRef<[T]>> DataBlock<T> for SliceDataBlock<T, C> {
     }
 }
 
-const BLOCK_FIXED_LEN: u16 = 0;
-const BLOCK_VAR_LEN: u16 = 1;
+const CHUNK_FIXED_LEN: u16 = 0;
+const CHUNK_VAR_LEN: u16 = 1;
 
-pub trait DefaultBlockHeaderReader<R: std::io::Read> {
-    fn read_block_header(buffer: &mut R, grid_position: GridCoord) -> std::io::Result<BlockHeader> {
+pub trait DefaultChunkHeaderReader<R: std::io::Read> {
+    fn read_chunk_header(buffer: &mut R, grid_position: GridCoord) -> std::io::Result<ChunkHeader> {
         let mode = buffer.read_u16::<N5Endian>()?;
         let ndim = buffer.read_u16::<N5Endian>()?;
         let mut size = smallvec![0; ndim as usize];
         buffer.read_u32_into::<N5Endian>(&mut size)?;
         let num_el = match mode {
-            BLOCK_FIXED_LEN => size.iter().product(),
-            BLOCK_VAR_LEN => buffer.read_u32::<N5Endian>()?,
-            _ => return Err(Error::new(ErrorKind::InvalidData, "Unsupported block mode")),
+            CHUNK_FIXED_LEN => size.iter().product(),
+            CHUNK_VAR_LEN => buffer.read_u32::<N5Endian>()?,
+            _ => return Err(Error::new(ErrorKind::InvalidData, "Unsupported chunk mode")),
         };
 
-        Ok(BlockHeader {
+        Ok(ChunkHeader {
             size,
             grid_position,
             num_el: num_el as usize,
@@ -945,91 +945,91 @@ pub trait DefaultBlockHeaderReader<R: std::io::Read> {
     }
 }
 
-/// Reads blocks from rust readers.
-pub trait DefaultBlockReader<T: ReflectedType, R: std::io::Read>:
-    DefaultBlockHeaderReader<R>
+/// Reads chunks from rust readers.
+pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read>:
+    DefaultChunkHeaderReader<R>
 {
-    fn read_block(
+    fn read_chunk(
         mut buffer: R,
         data_attrs: &DatasetAttributes,
         grid_position: GridCoord,
-    ) -> std::io::Result<VecDataBlock<T>>
+    ) -> std::io::Result<VecDataChunk<T>>
     where
-        VecDataBlock<T>: DataBlock<T> + ReadableDataBlock,
+        VecDataChunk<T>: DataChunk<T> + ReadableDataChunk,
     {
         if data_attrs.data_type != T::VARIANT {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                "Attempt to create data block for wrong type.",
+                "Attempt to create data chunk for wrong type.",
             ));
         }
-        let header = Self::read_block_header(&mut buffer, grid_position)?;
+        let header = Self::read_chunk_header(&mut buffer, grid_position)?;
 
-        let mut block = T::create_data_block(header);
+        let mut chunk = T::create_data_chunk(header);
         let mut decompressed = data_attrs.compression.decoder(buffer);
-        block.read_data(&mut decompressed)?;
+        chunk.read_data(&mut decompressed)?;
 
-        Ok(block)
+        Ok(chunk)
     }
 
-    fn read_block_into<B: DataBlock<T> + ReinitDataBlock<T> + ReadableDataBlock>(
+    fn read_chunk_into<B: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk>(
         mut buffer: R,
         data_attrs: &DatasetAttributes,
         grid_position: GridCoord,
-        block: &mut B,
+        chunk: &mut B,
     ) -> std::io::Result<()> {
         if data_attrs.data_type != T::VARIANT {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                "Attempt to create data block for wrong type.",
+                "Attempt to create data chunk for wrong type.",
             ));
         }
-        let header = Self::read_block_header(&mut buffer, grid_position)?;
+        let header = Self::read_chunk_header(&mut buffer, grid_position)?;
 
-        block.reinitialize(header);
+        chunk.reinitialize(header);
         let mut decompressed = data_attrs.compression.decoder(buffer);
-        block.read_data(&mut decompressed)?;
+        chunk.read_data(&mut decompressed)?;
 
         Ok(())
     }
 }
 
-/// Writes blocks to rust writers.
-pub trait DefaultBlockWriter<
+/// Writes chunks to rust writers.
+pub trait DefaultChunkWriter<
     T: ReflectedType,
     W: std::io::Write,
-    B: DataBlock<T> + WriteableDataBlock,
+    B: DataChunk<T> + WriteableDataChunk,
 >
 {
-    fn write_block(
+    fn write_chunk(
         mut buffer: W,
         data_attrs: &DatasetAttributes,
-        block: &B,
+        chunk: &B,
     ) -> std::io::Result<()> {
         if data_attrs.data_type != T::VARIANT {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                "Attempt to write data block for wrong type.",
+                "Attempt to write data chunk for wrong type.",
             ));
         }
 
-        let mode: u16 = if block.get_num_elements() == block.get_size().iter().product::<u32>() {
-            BLOCK_FIXED_LEN
+        let mode: u16 = if chunk.get_num_elements() == chunk.get_size().iter().product::<u32>() {
+            CHUNK_FIXED_LEN
         } else {
-            BLOCK_VAR_LEN
+            CHUNK_VAR_LEN
         };
         buffer.write_u16::<N5Endian>(mode)?;
         buffer.write_u16::<N5Endian>(data_attrs.get_ndim() as u16)?;
-        for i in block.get_size() {
+        for i in chunk.get_size() {
             buffer.write_u32::<N5Endian>(*i)?;
         }
 
-        if mode != BLOCK_FIXED_LEN {
-            buffer.write_u32::<N5Endian>(block.get_num_elements())?;
+        if mode != CHUNK_FIXED_LEN {
+            buffer.write_u32::<N5Endian>(chunk.get_num_elements())?;
         }
 
         let mut compressor = data_attrs.compression.encoder(buffer);
-        block.write_data(&mut compressor)?;
+        chunk.write_data(&mut compressor)?;
 
         Ok(())
     }
@@ -1037,12 +1037,12 @@ pub trait DefaultBlockWriter<
 
 // TODO: needed because cannot invoke type parameterized static trait methods
 // directly from trait name in Rust. Symptom of design problems with
-// `DefaultBlockReader`, etc.
+// `DefaultChunkReader`, etc.
 #[derive(Debug)]
-pub struct DefaultBlock;
-impl<R: std::io::Read> DefaultBlockHeaderReader<R> for DefaultBlock {}
-impl<T: ReflectedType, R: std::io::Read> DefaultBlockReader<T, R> for DefaultBlock {}
-impl<T: ReflectedType, W: std::io::Write, B: DataBlock<T> + WriteableDataBlock>
-    DefaultBlockWriter<T, W, B> for DefaultBlock
+pub struct DefaultChunk;
+impl<R: std::io::Read> DefaultChunkHeaderReader<R> for DefaultChunk {}
+impl<T: ReflectedType, R: std::io::Read> DefaultChunkReader<T, R> for DefaultChunk {}
+impl<T: ReflectedType, W: std::io::Write, B: DataChunk<T> + WriteableDataChunk>
+    DefaultChunkWriter<T, W, B> for DefaultChunk
 {
 }

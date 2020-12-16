@@ -6,7 +6,7 @@ use std::io::{
 
 use serde_json::json;
 
-const DOC_SPEC_BLOCK_DATA: [i16; 6] = [1, 2, 3, 4, 5, 6];
+const DOC_SPEC_CHUNK_DATA: [i16; 6] = [1, 2, 3, 4, 5, 6];
 
 pub(crate) trait N5Testable: N5Reader + N5Writer {
     type Wrapper: AsRef<Self>;
@@ -38,108 +38,108 @@ fn doc_spec_dataset_attributes(compression: compression::CompressionType) -> Dat
     )
 }
 
-pub(crate) fn test_read_doc_spec_block(block: &[u8], compression: compression::CompressionType) {
-    let buff = Cursor::new(block);
+pub(crate) fn test_read_doc_spec_chunk(chunk: &[u8], compression: compression::CompressionType) {
+    let buff = Cursor::new(chunk);
     let data_attrs = doc_spec_dataset_attributes(compression);
 
-    let block = <DefaultBlock as DefaultBlockReader<i16, std::io::Cursor<&[u8]>>>::read_block(
+    let chunk = <DefaultChunk as DefaultChunkReader<i16, std::io::Cursor<&[u8]>>>::read_chunk(
         buff,
         &data_attrs,
         smallvec![0, 0, 0],
     )
-    .expect("read_block failed");
+    .expect("read_chunk failed");
 
-    assert_eq!(block.get_size(), data_attrs.get_block_size());
-    assert_eq!(block.get_grid_position(), &[0, 0, 0]);
-    assert_eq!(block.get_data(), &DOC_SPEC_BLOCK_DATA);
+    assert_eq!(chunk.get_size(), data_attrs.get_chunk_size());
+    assert_eq!(chunk.get_grid_position(), &[0, 0, 0]);
+    assert_eq!(chunk.get_data(), &DOC_SPEC_CHUNK_DATA);
 }
 
-pub(crate) fn test_write_doc_spec_block(
-    expected_block: &[u8],
+pub(crate) fn test_write_doc_spec_chunk(
+    expected_chunk: &[u8],
     compression: compression::CompressionType,
 ) {
     let data_attrs = doc_spec_dataset_attributes(compression);
-    let block_in = SliceDataBlock::new(
-        data_attrs.chunk_grid.block_size.clone(),
+    let chunk_in = SliceDataChunk::new(
+        data_attrs.chunk_grid.chunk_size.clone(),
         smallvec![0, 0, 0],
-        DOC_SPEC_BLOCK_DATA,
+        DOC_SPEC_CHUNK_DATA,
     );
     let mut buff: Vec<u8> = Vec::new();
 
-    <DefaultBlock as DefaultBlockWriter<i16, _, _>>::write_block(&mut buff, &data_attrs, &block_in)
-        .expect("read_block failed");
+    <DefaultChunk as DefaultChunkWriter<i16, _, _>>::write_chunk(&mut buff, &data_attrs, &chunk_in)
+        .expect("read_chunk failed");
 
-    assert_eq!(buff, expected_block);
+    assert_eq!(buff, expected_chunk);
 }
 
-pub(crate) fn test_block_compression_rw(compression: compression::CompressionType) {
+pub(crate) fn test_chunk_compression_rw(compression: compression::CompressionType) {
     let data_attrs = DatasetAttributes::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
         DataType::INT32,
         compression,
     );
-    let block_data: Vec<i32> = (0..125_i32).collect();
-    let block_in = SliceDataBlock::new(
-        data_attrs.chunk_grid.block_size.clone(),
+    let chunk_data: Vec<i32> = (0..125_i32).collect();
+    let chunk_in = SliceDataChunk::new(
+        data_attrs.chunk_grid.chunk_size.clone(),
         smallvec![0, 0, 0],
-        &block_data,
+        &chunk_data,
     );
 
     let mut inner: Vec<u8> = Vec::new();
 
-    <DefaultBlock as DefaultBlockWriter<i32, _, _>>::write_block(
+    <DefaultChunk as DefaultChunkWriter<i32, _, _>>::write_chunk(
         &mut inner,
         &data_attrs,
-        &block_in,
+        &chunk_in,
     )
-    .expect("write_block failed");
+    .expect("write_chunk failed");
 
-    let block_out = <DefaultBlock as DefaultBlockReader<i32, _>>::read_block(
+    let chunk_out = <DefaultChunk as DefaultChunkReader<i32, _>>::read_chunk(
         &inner[..],
         &data_attrs,
         smallvec![0, 0, 0],
     )
-    .expect("read_block failed");
+    .expect("read_chunk failed");
 
-    assert_eq!(block_out.get_size(), &[5, 5, 5]);
-    assert_eq!(block_out.get_grid_position(), &[0, 0, 0]);
-    assert_eq!(block_out.get_data(), &block_data[..]);
+    assert_eq!(chunk_out.get_size(), &[5, 5, 5]);
+    assert_eq!(chunk_out.get_grid_position(), &[0, 0, 0]);
+    assert_eq!(chunk_out.get_data(), &chunk_data[..]);
 }
 
-pub(crate) fn test_varlength_block_rw(compression: compression::CompressionType) {
+pub(crate) fn test_varlength_chunk_rw(compression: compression::CompressionType) {
     let data_attrs = DatasetAttributes::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
         DataType::INT32,
         compression,
     );
-    let block_data: Vec<i32> = (0..100_i32).collect();
-    let block_in = SliceDataBlock::new(
-        data_attrs.chunk_grid.block_size.clone(),
+    let chunk_data: Vec<i32> = (0..100_i32).collect();
+    let chunk_in = SliceDataChunk::new(
+        data_attrs.chunk_grid.chunk_size.clone(),
         smallvec![0, 0, 0],
-        &block_data,
+        &chunk_data,
     );
 
     let mut inner: Vec<u8> = Vec::new();
 
-    <DefaultBlock as DefaultBlockWriter<i32, _, _>>::write_block(
+    <DefaultChunk as DefaultChunkWriter<i32, _, _>>::write_chunk(
         &mut inner,
         &data_attrs,
-        &block_in,
+        &chunk_in,
     )
-    .expect("write_block failed");
+    .expect("write_chunk failed");
 
-    let block_out = <DefaultBlock as DefaultBlockReader<i32, _>>::read_block(
+    let chunk_out = <DefaultChunk as DefaultChunkReader<i32, _>>::read_chunk(
         &inner[..],
         &data_attrs,
         smallvec![0, 0, 0],
     )
-    .expect("read_block failed");
+    .expect("read_chunk failed");
 
-    assert_eq!(block_out.get_size(), &[5, 5, 5]);
-    assert_eq!(block_out.get_grid_position(), &[0, 0, 0]);
-    assert_eq!(block_out.get_data(), &block_data[..]);
+    assert_eq!(chunk_out.get_size(), &[5, 5, 5]);
+    assert_eq!(chunk_out.get_grid_position(), &[0, 0, 0]);
+    assert_eq!(chunk_out.get_data(), &chunk_data[..]);
 }
 
 pub(crate) fn create_backend<N: N5Testable>() {
@@ -281,7 +281,7 @@ pub(crate) fn attributes_rw<N: N5Testable>() {
     );
 }
 
-pub(crate) fn create_block_rw<N: N5Testable>() {
+pub(crate) fn create_chunk_rw<N: N5Testable>() {
     let wrapper = N::temp_new_rw();
     let create = wrapper.as_ref();
     let data_attrs = DatasetAttributes::new(
@@ -290,51 +290,51 @@ pub(crate) fn create_block_rw<N: N5Testable>() {
         DataType::INT32,
         crate::compression::CompressionType::Raw(crate::compression::raw::RawCompression::default()),
     );
-    let block_data: Vec<i32> = (0..125_i32).collect();
-    let block_in = crate::SliceDataBlock::new(
-        data_attrs.chunk_grid.block_size.clone(),
+    let chunk_data: Vec<i32> = (0..125_i32).collect();
+    let chunk_in = crate::SliceDataChunk::new(
+        data_attrs.chunk_grid.chunk_size.clone(),
         smallvec![0, 0, 0],
-        &block_data,
+        &chunk_data,
     );
 
     create
         .create_dataset("foo/bar", &data_attrs)
         .expect("Failed to create dataset");
     create
-        .write_block("foo/bar", &data_attrs, &block_in)
-        .expect("Failed to write block");
+        .write_chunk("foo/bar", &data_attrs, &chunk_in)
+        .expect("Failed to write chunk");
 
     let read = create.open_reader();
-    let block_out = read
-        .read_block::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 0])
-        .expect("Failed to read block")
-        .expect("Block is empty");
-    let missing_block_out = read
-        .read_block::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 1])
-        .expect("Failed to read block");
+    let chunk_out = read
+        .read_chunk::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 0])
+        .expect("Failed to read chunk")
+        .expect("Chunk is empty");
+    let missing_chunk_out = read
+        .read_chunk::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 1])
+        .expect("Failed to read chunk");
 
-    assert_eq!(block_out.get_data(), &block_data[..]);
-    assert!(missing_block_out.is_none());
+    assert_eq!(chunk_out.get_data(), &chunk_data[..]);
+    assert!(missing_chunk_out.is_none());
 
     // Shorten data (this still will not catch trailing data less than the length).
-    let block_data: Vec<i32> = (0..10_i32).collect();
-    let block_in = crate::SliceDataBlock::new(
-        data_attrs.chunk_grid.block_size.clone(),
+    let chunk_data: Vec<i32> = (0..10_i32).collect();
+    let chunk_in = crate::SliceDataChunk::new(
+        data_attrs.chunk_grid.chunk_size.clone(),
         smallvec![0, 0, 0],
-        &block_data,
+        &chunk_data,
     );
     create
-        .write_block("foo/bar", &data_attrs, &block_in)
-        .expect("Failed to write block");
-    let block_out = read
-        .read_block::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 0])
-        .expect("Failed to read block")
-        .expect("Block is empty");
+        .write_chunk("foo/bar", &data_attrs, &chunk_in)
+        .expect("Failed to write chunk");
+    let chunk_out = read
+        .read_chunk::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 0])
+        .expect("Failed to read chunk")
+        .expect("Chunk is empty");
 
-    assert_eq!(block_out.get_data(), &block_data[..]);
+    assert_eq!(chunk_out.get_data(), &chunk_data[..]);
 }
 
-pub(crate) fn delete_block<N: N5Testable>() {
+pub(crate) fn delete_chunk<N: N5Testable>() {
     let wrapper = N::temp_new_rw();
     let create = wrapper.as_ref();
     let data_attrs = DatasetAttributes::new(
@@ -348,32 +348,32 @@ pub(crate) fn delete_block<N: N5Testable>() {
     let coord_b: GridCoord = smallvec![1, 2, 4];
 
     let dataset = "foo/bar";
-    let block_data: Vec<i32> = (0..125_i32).collect();
-    let block_in = crate::SliceDataBlock::new(
-        data_attrs.chunk_grid.block_size.clone(),
+    let chunk_data: Vec<i32> = (0..125_i32).collect();
+    let chunk_in = crate::SliceDataChunk::new(
+        data_attrs.chunk_grid.chunk_size.clone(),
         coord_a.clone(),
-        &block_data,
+        &chunk_data,
     );
 
     create
         .create_dataset(dataset, &data_attrs)
         .expect("Failed to create dataset");
     create
-        .write_block(dataset, &data_attrs, &block_in)
-        .expect("Failed to write block");
+        .write_chunk(dataset, &data_attrs, &chunk_in)
+        .expect("Failed to write chunk");
 
     assert!(create
-        .read_block::<i32>(dataset, &data_attrs, coord_a.clone())
-        .expect("Failed to read block")
+        .read_chunk::<i32>(dataset, &data_attrs, coord_a.clone())
+        .expect("Failed to read chunk")
         .is_some());
 
-    assert!(create.delete_block(dataset, &data_attrs, &coord_a).unwrap());
-    assert!(create.delete_block(dataset, &data_attrs, &coord_a).unwrap());
-    assert!(create.delete_block(dataset, &data_attrs, &coord_b).unwrap());
+    assert!(create.delete_chunk(dataset, &data_attrs, &coord_a).unwrap());
+    assert!(create.delete_chunk(dataset, &data_attrs, &coord_a).unwrap());
+    assert!(create.delete_chunk(dataset, &data_attrs, &coord_b).unwrap());
 
     assert!(create
-        .read_block::<i32>(dataset, &data_attrs, coord_a.clone())
-        .expect("Failed to read block")
+        .read_chunk::<i32>(dataset, &data_attrs, coord_a.clone())
+        .expect("Failed to read chunk")
         .is_none());
 }
 
@@ -401,13 +401,13 @@ macro_rules! test_backend {
         }
 
         #[test]
-        fn create_block_rw() {
-            $crate::tests::create_block_rw::<$backend>()
+        fn create_chunk_rw() {
+            $crate::tests::create_chunk_rw::<$backend>()
         }
 
         #[test]
-        fn delete_block() {
-            $crate::tests::delete_block::<$backend>()
+        fn delete_chunk() {
+            $crate::tests::delete_chunk::<$backend>()
         }
     };
 }

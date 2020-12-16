@@ -15,19 +15,19 @@ use ndarray::{
 };
 
 use crate::{
-    BlockCoord,
+    ChunkCoord,
     CoordVec,
-    DataBlock,
+    DataChunk,
     DatasetAttributes,
     GridCoord,
     N5Reader,
     N5Writer,
-    ReadableDataBlock,
+    ReadableDataChunk,
     ReflectedType,
-    ReinitDataBlock,
-    SliceDataBlock,
-    VecDataBlock,
-    WriteableDataBlock,
+    ReinitDataChunk,
+    SliceDataChunk,
+    VecDataChunk,
+    WriteableDataChunk,
 };
 
 pub mod prelude {
@@ -52,7 +52,7 @@ impl BoundingBox {
         BoundingBox { offset, size }
     }
 
-    pub fn size_block(&self) -> BlockCoord {
+    pub fn size_chunk(&self) -> ChunkCoord {
         self.size.iter().map(|n| *n as u32).collect()
     }
 
@@ -147,9 +147,9 @@ impl Sub<&GridCoord> for BoundingBox {
 
 pub trait N5NdarrayReader: N5Reader {
     /// Read an arbitrary bounding box from an N5 volume into an ndarray,
-    /// reading blocks in serial as necessary.
+    /// reading chunks in serial as necessary.
     ///
-    /// Assumes blocks are column-major and returns a column-major ndarray.
+    /// Assumes chunks are column-major and returns a column-major ndarray.
     fn read_ndarray<T>(
         &self,
         path_name: &str,
@@ -157,7 +157,7 @@ pub trait N5NdarrayReader: N5Reader {
         bbox: &BoundingBox,
     ) -> Result<ndarray::Array<T, ndarray::Dim<ndarray::IxDynImpl>>, Error>
     where
-        VecDataBlock<T>: DataBlock<T> + ReinitDataBlock<T> + ReadableDataBlock,
+        VecDataChunk<T>: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
         T: ReflectedType + num_traits::identities::Zero,
     {
         let mut arr = Array::zeros(bbox.size_ndarray_shape().f());
@@ -168,9 +168,9 @@ pub trait N5NdarrayReader: N5Reader {
     }
 
     /// Read an arbitrary bounding box from an N5 volume into an existing
-    /// ndarray view, reading blocks in serial as necessary.
+    /// ndarray view, reading chunks in serial as necessary.
     ///
-    /// Assumes blocks are column-major. The array can be any order, but column-
+    /// Assumes chunks are column-major. The array can be any order, but column-
     /// major will be more efficient.
     fn read_ndarray_into<'a, T>(
         &self,
@@ -180,17 +180,17 @@ pub trait N5NdarrayReader: N5Reader {
         arr: ndarray::ArrayViewMut<'a, T, ndarray::Dim<ndarray::IxDynImpl>>,
     ) -> Result<(), Error>
     where
-        VecDataBlock<T>: DataBlock<T> + ReinitDataBlock<T> + ReadableDataBlock,
+        VecDataChunk<T>: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
         T: ReflectedType + num_traits::identities::Zero,
     {
         self.read_ndarray_into_with_buffer(path_name, data_attrs, bbox, arr, &mut None)
     }
 
     /// Read an arbitrary bounding box from an N5 volume into an existing
-    /// ndarray view, reading blocks in serial as necessary into a provided
+    /// ndarray view, reading chunks in serial as necessary into a provided
     /// buffer.
     ///
-    /// Assumes blocks are column-major. The array can be any order, but column-
+    /// Assumes chunks are column-major. The array can be any order, but column-
     /// major will be more efficient.
     fn read_ndarray_into_with_buffer<'a, T>(
         &self,
@@ -198,10 +198,10 @@ pub trait N5NdarrayReader: N5Reader {
         data_attrs: &DatasetAttributes,
         bbox: &BoundingBox,
         mut arr: ndarray::ArrayViewMut<'a, T, ndarray::Dim<ndarray::IxDynImpl>>,
-        block_buff_opt: &mut Option<VecDataBlock<T>>,
+        chunk_buff_opt: &mut Option<VecDataChunk<T>>,
     ) -> Result<(), Error>
     where
-        VecDataBlock<T>: DataBlock<T> + ReinitDataBlock<T> + ReadableDataBlock,
+        VecDataChunk<T>: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
         T: ReflectedType + num_traits::identities::Zero,
     {
         if bbox.offset.len() != data_attrs.get_ndim() || data_attrs.get_ndim() != arr.ndim() {
@@ -220,50 +220,50 @@ pub trait N5NdarrayReader: N5Reader {
 
         for coord in data_attrs.bounded_coord_iter(bbox) {
             let grid_pos = GridCoord::from(&coord[..]);
-            let is_block = match block_buff_opt {
+            let is_chunk = match chunk_buff_opt {
                 None => {
-                    *block_buff_opt = self.read_block(path_name, data_attrs, grid_pos)?;
-                    block_buff_opt.is_some()
+                    *chunk_buff_opt = self.read_chunk(path_name, data_attrs, grid_pos)?;
+                    chunk_buff_opt.is_some()
                 }
-                Some(ref mut block_buff) => self
-                    .read_block_into(path_name, data_attrs, grid_pos, block_buff)?
+                Some(ref mut chunk_buff) => self
+                    .read_chunk_into(path_name, data_attrs, grid_pos, chunk_buff)?
                     .is_some(),
             };
 
             // TODO: cannot combine this into condition below until `let_chains` stabilizes.
-            if !is_block {
+            if !is_chunk {
                 continue;
             }
 
-            if let Some(ref block) = block_buff_opt {
-                let block_bb = block.get_bounds(data_attrs);
+            if let Some(ref chunk) = chunk_buff_opt {
+                let chunk_bb = chunk.get_bounds(data_attrs);
                 let mut read_bb = bbox.clone();
-                read_bb.intersect(&block_bb);
+                read_bb.intersect(&chunk_bb);
 
-                // It may be the case the while the block's potential bounds are
-                // in the request region, the block is smaller such that it does
+                // It may be the case the while the chunk's potential bounds are
+                // in the request region, the chunk is smaller such that it does
                 // not intersect.
                 if read_bb.is_empty() {
                     continue;
                 }
 
                 let arr_read_bb = read_bb.clone() - &bbox.offset;
-                let block_read_bb = read_bb.clone() - &block_bb.offset;
+                let chunk_read_bb = read_bb.clone() - &chunk_bb.offset;
 
                 let arr_slice = arr_read_bb.to_ndarray_slice();
                 let mut arr_view =
                     arr.slice_mut(SliceInfo::<_, IxDyn>::new(arr_slice).unwrap().as_ref());
 
-                let block_slice = block_read_bb.to_ndarray_slice();
+                let chunk_slice = chunk_read_bb.to_ndarray_slice();
 
                 // N5 datasets are stored f-order/column-major.
-                let block_data =
-                    ArrayView::from_shape(block_bb.size_ndarray_shape().f(), block.get_data())
-                        .expect("TODO: block ndarray failed");
-                let block_view =
-                    block_data.slice(SliceInfo::<_, IxDyn>::new(block_slice).unwrap().as_ref());
+                let chunk_data =
+                    ArrayView::from_shape(chunk_bb.size_ndarray_shape().f(), chunk.get_data())
+                        .expect("TODO: chunk ndarray failed");
+                let chunk_view =
+                    chunk_data.slice(SliceInfo::<_, IxDyn>::new(chunk_slice).unwrap().as_ref());
 
-                arr_view.assign(&block_view);
+                arr_view.assign(&chunk_view);
             }
         }
 
@@ -275,7 +275,7 @@ impl<T: N5Reader> N5NdarrayReader for T {}
 
 pub trait N5NdarrayWriter: N5Writer {
     /// Write an arbitrary bounding box from an ndarray into an N5 volume,
-    /// writing blocks in serial as necessary.
+    /// writing chunks in serial as necessary.
     fn write_ndarray<'a, T, A>(
         &self,
         path_name: &str,
@@ -284,9 +284,9 @@ pub trait N5NdarrayWriter: N5Writer {
         array: A,
         fill_val: T,
     ) -> Result<(), Error>
-    // TODO: Next breaking version, refactor to use `SliceDataBlock` bounds.
+    // TODO: Next breaking version, refactor to use `SliceDataChunk` bounds.
     where
-        VecDataBlock<T>: DataBlock<T> + ReadableDataBlock + WriteableDataBlock,
+        VecDataChunk<T>: DataChunk<T> + ReadableDataChunk + WriteableDataChunk,
         T: ReflectedType + num_traits::identities::Zero,
         A: ndarray::AsArray<'a, T, ndarray::Dim<ndarray::IxDynImpl>>,
     {
@@ -302,71 +302,71 @@ pub trait N5NdarrayWriter: N5Writer {
             size: array.shape().iter().map(|n| *n as u64).collect(),
         };
 
-        let mut block_vec: Vec<T> = Vec::new();
+        let mut chunk_vec: Vec<T> = Vec::new();
 
         for coord in data_attrs.bounded_coord_iter(&bbox) {
             let grid_coord = GridCoord::from(&coord[..]);
-            let nom_block_bb = data_attrs.get_block_bounds(&grid_coord);
-            let mut write_bb = nom_block_bb.clone();
+            let nom_chunk_bb = data_attrs.get_chunk_bounds(&grid_coord);
+            let mut write_bb = nom_chunk_bb.clone();
             write_bb.intersect(&bbox);
             let arr_bb = write_bb.clone() - &bbox.offset;
 
             let arr_slice = arr_bb.to_ndarray_slice();
             let arr_view = array.slice(SliceInfo::<_, IxDyn>::new(arr_slice).unwrap().as_ref());
 
-            if write_bb == nom_block_bb {
-                // No need to read whether there is an extant block if it is
+            if write_bb == nom_chunk_bb {
+                // No need to read whether there is an extant chunk if it is
                 // going to be entirely overwriten.
-                block_vec.clear();
-                block_vec.extend(arr_view.t().iter().cloned());
-                let block = VecDataBlock::new(write_bb.size_block(), coord.into(), block_vec);
+                chunk_vec.clear();
+                chunk_vec.extend(arr_view.t().iter().cloned());
+                let chunk = VecDataChunk::new(write_bb.size_chunk(), coord.into(), chunk_vec);
 
-                self.write_block(path_name, data_attrs, &block)?;
-                block_vec = block.into_data();
+                self.write_chunk(path_name, data_attrs, &chunk)?;
+                chunk_vec = chunk.into_data();
             } else {
-                let block_opt = self.read_block(path_name, data_attrs, grid_coord.clone())?;
+                let chunk_opt = self.read_chunk(path_name, data_attrs, grid_coord.clone())?;
 
-                let (block_bb, mut block_array) = match block_opt {
-                    Some(block) => {
-                        let block_bb = block.get_bounds(data_attrs);
-                        let block_array = Array::from_shape_vec(
-                            block_bb.size_ndarray_shape().f(),
-                            block.into_data(),
+                let (chunk_bb, mut chunk_array) = match chunk_opt {
+                    Some(chunk) => {
+                        let chunk_bb = chunk.get_bounds(data_attrs);
+                        let chunk_array = Array::from_shape_vec(
+                            chunk_bb.size_ndarray_shape().f(),
+                            chunk.into_data(),
                         )
-                        .expect("TODO: block ndarray failed");
-                        (block_bb, block_array)
+                        .expect("TODO: chunk ndarray failed");
+                        (chunk_bb, chunk_array)
                     }
                     None => {
-                        // If no block exists, need to write from its origin.
-                        let mut block_bb = write_bb.clone();
-                        block_bb
+                        // If no chunk exists, need to write from its origin.
+                        let mut chunk_bb = write_bb.clone();
+                        chunk_bb
                             .size
                             .iter_mut()
                             .zip(write_bb.offset.iter())
-                            .zip(nom_block_bb.offset.iter())
+                            .zip(nom_chunk_bb.offset.iter())
                             .for_each(|((s, o), g)| *s += *o - *g);
-                        block_bb.offset = nom_block_bb.offset.clone();
-                        let block_size_usize = block_bb.size_ndarray_shape();
+                        chunk_bb.offset = nom_chunk_bb.offset.clone();
+                        let chunk_size_usize = chunk_bb.size_ndarray_shape();
 
-                        let block_array =
-                            Array::from_elem(&block_size_usize[..], fill_val.clone()).into_dyn();
-                        (block_bb, block_array)
+                        let chunk_array =
+                            Array::from_elem(&chunk_size_usize[..], fill_val.clone()).into_dyn();
+                        (chunk_bb, chunk_array)
                     }
                 };
 
-                let block_write_bb = write_bb.clone() - &block_bb.offset;
-                let block_slice = block_write_bb.to_ndarray_slice();
-                let mut block_view = block_array
-                    .slice_mut(SliceInfo::<_, IxDyn>::new(block_slice).unwrap().as_ref());
+                let chunk_write_bb = write_bb.clone() - &chunk_bb.offset;
+                let chunk_slice = chunk_write_bb.to_ndarray_slice();
+                let mut chunk_view = chunk_array
+                    .slice_mut(SliceInfo::<_, IxDyn>::new(chunk_slice).unwrap().as_ref());
 
-                block_view.assign(&arr_view);
+                chunk_view.assign(&arr_view);
 
-                block_vec.clear();
-                block_vec.extend(block_array.t().iter().cloned());
-                let block = VecDataBlock::new(block_bb.size_block(), coord.into(), block_vec);
+                chunk_vec.clear();
+                chunk_vec.extend(chunk_array.t().iter().cloned());
+                let chunk = VecDataChunk::new(chunk_bb.size_chunk(), coord.into(), chunk_vec);
 
-                self.write_block(path_name, data_attrs, &block)?;
-                block_vec = block.into_data();
+                self.write_chunk(path_name, data_attrs, &chunk)?;
+                chunk_vec = chunk.into_data();
             }
         }
 
@@ -381,7 +381,7 @@ impl DatasetAttributes {
         let coord_ceil = self
             .get_dimensions()
             .iter()
-            .zip(self.get_block_size().iter())
+            .zip(self.get_chunk_size().iter())
             .map(|(&d, &s)| (d + u64::from(s) - 1) / u64::from(s))
             .collect::<GridCoord>();
 
@@ -395,14 +395,14 @@ impl DatasetAttributes {
         let floor_coord: GridCoord = bbox
             .offset
             .iter()
-            .zip(&self.chunk_grid.block_size)
+            .zip(&self.chunk_grid.chunk_size)
             .map(|(&o, &bs)| o / u64::from(bs))
             .collect();
         let ceil_coord: GridCoord = bbox
             .offset
             .iter()
             .zip(&bbox.size)
-            .zip(self.chunk_grid.block_size.iter().cloned().map(u64::from))
+            .zip(self.chunk_grid.chunk_size.iter().cloned().map(u64::from))
             .map(|((&o, &s), bs)| (o + s + bs - 1) / bs)
             .collect();
 
@@ -416,9 +416,9 @@ impl DatasetAttributes {
         }
     }
 
-    pub fn get_block_bounds(&self, coord: &GridCoord) -> BoundingBox {
+    pub fn get_chunk_bounds(&self, coord: &GridCoord) -> BoundingBox {
         let mut size: GridCoord = self
-            .get_block_size()
+            .get_chunk_size()
             .iter()
             .cloned()
             .map(u64::from)
@@ -432,11 +432,11 @@ impl DatasetAttributes {
     }
 }
 
-impl<T: ReflectedType, C> SliceDataBlock<T, C> {
-    /// Get the bounding box of the occupied extent of this block, which may
+impl<T: ReflectedType, C> SliceDataChunk<T, C> {
+    /// Get the bounding box of the occupied extent of this chunk, which may
     /// be smaller than the nominal bounding box expected from the dataset.
     pub fn get_bounds(&self, data_attrs: &DatasetAttributes) -> BoundingBox {
-        let mut bbox = data_attrs.get_block_bounds(&self.grid_position);
+        let mut bbox = data_attrs.get_chunk_bounds(&self.grid_position);
         bbox.size = self.size.iter().cloned().map(u64::from).collect();
         bbox
     }

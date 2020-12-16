@@ -16,45 +16,45 @@ fn test_read_ndarray() {
 
     let n = N5Filesystem::open_or_create(dir.path()).expect("Failed to create N5 filesystem");
 
-    let block_size = smallvec![3, 4, 2, 1];
+    let chunk_size = smallvec![3, 4, 2, 1];
     let data_attrs = DatasetAttributes::new(
         smallvec![3, 300, 200, 100],
-        block_size.clone(),
+        chunk_size.clone(),
         i32::VARIANT,
         CompressionType::default(),
     );
-    let numel = data_attrs.get_block_num_elements();
+    let numel = data_attrs.get_chunk_num_elements();
 
     let path_name = "test/dataset/group";
     n.create_dataset(path_name, &data_attrs)
         .expect("Failed to create dataset");
 
     for k in 0..10 {
-        let z = block_size[3] * k;
+        let z = chunk_size[3] * k;
         for j in 0..10 {
-            let y = block_size[2] * j;
+            let y = chunk_size[2] * j;
             for i in 0..10 {
-                let x = block_size[1] * i;
+                let x = chunk_size[1] * i;
 
-                let mut block_data = Vec::<i32>::with_capacity(numel);
+                let mut chunk_data = Vec::<i32>::with_capacity(numel);
 
-                for zo in 0..block_size[3] {
-                    for yo in 0..block_size[2] {
-                        for xo in 0..block_size[1] {
-                            block_data.push(1000 + x as i32 + xo as i32);
-                            block_data.push(2000 + y as i32 + yo as i32);
-                            block_data.push(3000 + z as i32 + zo as i32);
+                for zo in 0..chunk_size[3] {
+                    for yo in 0..chunk_size[2] {
+                        for xo in 0..chunk_size[1] {
+                            chunk_data.push(1000 + x as i32 + xo as i32);
+                            chunk_data.push(2000 + y as i32 + yo as i32);
+                            chunk_data.push(3000 + z as i32 + zo as i32);
                         }
                     }
                 }
 
-                let block_in = VecDataBlock::new(
-                    block_size.clone(),
+                let chunk_in = VecDataChunk::new(
+                    chunk_size.clone(),
                     smallvec![0, u64::from(i), u64::from(j), u64::from(k)],
-                    block_data,
+                    chunk_data,
                 );
-                n.write_block(path_name, &data_attrs, &block_in)
-                    .expect("Failed to write block");
+                n.write_chunk(path_name, &data_attrs, &chunk_in)
+                    .expect("Failed to write chunk");
             }
         }
     }
@@ -105,10 +105,10 @@ fn test_read_ndarray_oob() {
 
     let n = N5Filesystem::open_or_create(dir.path()).expect("Failed to create N5 filesystem");
 
-    let block_size = smallvec![50, 100];
+    let chunk_size = smallvec![50, 100];
     let data_attrs = DatasetAttributes::new(
         smallvec![100, 200],
-        block_size.clone(),
+        chunk_size.clone(),
         i32::VARIANT,
         CompressionType::default(),
     );
@@ -117,9 +117,9 @@ fn test_read_ndarray_oob() {
     n.create_dataset(path_name, &data_attrs)
         .expect("Failed to create dataset");
 
-    let block_in = VecDataBlock::new(smallvec![1, 1], smallvec![1, 1], vec![1]);
-    n.write_block(path_name, &data_attrs, &block_in)
-        .expect("Failed to write block");
+    let chunk_in = VecDataChunk::new(smallvec![1, 1], smallvec![1, 1], vec![1]);
+    n.write_chunk(path_name, &data_attrs, &chunk_in)
+        .expect("Failed to write chunk");
 
     let bbox = BoundingBox::new(smallvec![45, 175], smallvec![50, 50]);
     let a = n
@@ -134,10 +134,10 @@ fn test_write_read_ndarray() {
 
     let n = N5Filesystem::open_or_create(dir.path()).expect("Failed to create N5 filesystem");
 
-    let block_size = smallvec![3, 4, 2, 1];
+    let chunk_size = smallvec![3, 4, 2, 1];
     let data_attrs = DatasetAttributes::new(
         smallvec![3, 300, 200, 100],
-        block_size.clone(),
+        chunk_size.clone(),
         i32::VARIANT,
         CompressionType::default(),
     );

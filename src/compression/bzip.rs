@@ -52,7 +52,7 @@ mod tests {
 
     // Example from the n5 documentation spec.
     #[rustfmt::skip]
-    const TEST_BLOCK_I16_BZIP2: [u8; 59] = [
+    const TEST_CHUNK_I16_BZIP2: [u8; 59] = [
         0x00, 0x00,
         0x00, 0x03,
         0x00, 0x00, 0x00, 0x01,
@@ -72,9 +72,9 @@ mod tests {
     ];
 
     #[test]
-    fn test_read_doc_spec_block() {
-        crate::tests::test_read_doc_spec_block(
-            TEST_BLOCK_I16_BZIP2.as_ref(),
+    fn test_read_doc_spec_chunk() {
+        crate::tests::test_read_doc_spec_chunk(
+            TEST_CHUNK_I16_BZIP2.as_ref(),
             CompressionType::Bzip2(Bzip2Compression::default()),
         );
     }
@@ -82,16 +82,16 @@ mod tests {
     #[test]
     // This test is ignored since the compressed stream differs from Java.
     #[ignore]
-    fn test_write_doc_spec_block() {
-        crate::tests::test_write_doc_spec_block(
-            TEST_BLOCK_I16_BZIP2.as_ref(),
+    fn test_write_doc_spec_chunk() {
+        crate::tests::test_write_doc_spec_chunk(
+            TEST_CHUNK_I16_BZIP2.as_ref(),
             CompressionType::Bzip2(Bzip2Compression::default()),
         );
     }
 
     #[test]
     fn test_rw() {
-        crate::tests::test_block_compression_rw(
+        crate::tests::test_chunk_compression_rw(
             CompressionType::Bzip2(Bzip2Compression::default()),
         );
     }

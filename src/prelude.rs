@@ -19,9 +19,9 @@ pub use crate::compression::{
 pub use crate::filesystem::N5Filesystem;
 #[doc(no_inline)]
 pub use crate::{
-    BlockCoord,
-    DataBlock,
-    DataBlockMetadata,
+    ChunkCoord,
+    DataChunk,
+    DataChunkMetadata,
     DataType,
     DatasetAttributes,
     GridCoord,
@@ -29,6 +29,6 @@ pub use crate::{
     N5Reader,
     N5Writer,
     ReflectedType,
-    SliceDataBlock,
-    VecDataBlock,
+    SliceDataChunk,
+    VecDataChunk,
 };

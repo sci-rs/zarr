@@ -10,41 +10,41 @@ fn test_read_write<T, N5: N5Reader + N5Writer>(n: &N5, compression: &Compression
 where
     T: 'static + std::fmt::Debug + ReflectedType + PartialEq + Default,
     rand::distributions::Standard: rand::distributions::Distribution<T>,
-    VecDataBlock<T>: n5::ReadableDataBlock + n5::WriteableDataBlock,
+    VecDataChunk<T>: n5::ReadableDataChunk + n5::WriteableDataChunk,
 {
-    let block_size: BlockCoord = (1..=dim as u32).rev().map(|d| d * 5).collect();
+    let chunk_size: ChunkCoord = (1..=dim as u32).rev().map(|d| d * 5).collect();
     let data_attrs = DatasetAttributes::new(
         (1..=dim as u64).map(|d| d * 100).collect(),
-        block_size.clone(),
+        chunk_size.clone(),
         T::VARIANT,
         compression.clone(),
     );
-    let numel = data_attrs.get_block_num_elements();
+    let numel = data_attrs.get_chunk_num_elements();
     let rng = rand::thread_rng();
-    let block_data: Vec<T> = rng.sample_iter(&Standard).take(numel).collect();
+    let chunk_data: Vec<T> = rng.sample_iter(&Standard).take(numel).collect();
 
-    let block_in = SliceDataBlock::new(block_size, smallvec![0; dim], block_data);
+    let chunk_in = SliceDataChunk::new(chunk_size, smallvec![0; dim], chunk_data);
 
     let path_name = "test/dataset/group";
 
     n.create_dataset(path_name, &data_attrs)
         .expect("Failed to create dataset");
-    n.write_block(path_name, &data_attrs, &block_in)
-        .expect("Failed to write block");
+    n.write_chunk(path_name, &data_attrs, &chunk_in)
+        .expect("Failed to write chunk");
 
-    let block_data = block_in.into_data();
+    let chunk_data = chunk_in.into_data();
 
-    let block_out = n
-        .read_block::<T>(path_name, &data_attrs, smallvec![0; dim])
-        .expect("Failed to read block")
-        .expect("Block is empty");
-    assert_eq!(block_out.get_data(), &block_data[..]);
+    let chunk_out = n
+        .read_chunk::<T>(path_name, &data_attrs, smallvec![0; dim])
+        .expect("Failed to read chunk")
+        .expect("Chunk is empty");
+    assert_eq!(chunk_out.get_data(), &chunk_data[..]);
 
-    let mut into_block = VecDataBlock::new(smallvec![0; dim], smallvec![0; dim], vec![]);
-    n.read_block_into(path_name, &data_attrs, smallvec![0; dim], &mut into_block)
-        .expect("Failed to read block")
-        .expect("Block is empty");
-    assert_eq!(into_block.get_data(), &block_data[..]);
+    let mut into_chunk = VecDataChunk::new(smallvec![0; dim], smallvec![0; dim], vec![]);
+    n.read_chunk_into(path_name, &data_attrs, smallvec![0; dim], &mut into_chunk)
+        .expect("Failed to read chunk")
+        .expect("Chunk is empty");
+    assert_eq!(into_chunk.get_data(), &chunk_data[..]);
 
     n.remove(path_name).unwrap();
 }

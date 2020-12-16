@@ -3,8 +3,8 @@ use serde::{
     Serialize,
 };
 
-use crate::BlockHeader;
-use crate::VecDataBlock;
+use crate::ChunkHeader;
+use crate::VecDataChunk;
 
 /// Data types representable in N5.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
@@ -77,7 +77,7 @@ macro_rules! data_type_rstype_replace {
 }
 
 /// Match a DataType-valued expression, and in each arm repeat the provided
-/// code block with the token `RsType` replaced with the primitive type
+/// code chunk with the token `RsType` replaced with the primitive type
 /// appropriate for that arm.
 #[macro_export]
 macro_rules! data_type_match {
@@ -120,8 +120,8 @@ impl std::fmt::Display for DataType {
 pub trait ReflectedType: Send + Sync + Clone + Default + 'static {
     const VARIANT: DataType;
 
-    fn create_data_block(header: BlockHeader) -> VecDataBlock<Self> {
-        VecDataBlock::<Self>::new(
+    fn create_data_chunk(header: ChunkHeader) -> VecDataChunk<Self> {
+        VecDataChunk::<Self>::new(
             header.size,
             header.grid_position,
             vec![Self::default(); header.num_el],

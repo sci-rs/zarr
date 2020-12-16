@@ -49,7 +49,7 @@ mod tests {
 
     // Example from the n5 documentation spec.
     #[rustfmt::skip]
-    const TEST_BLOCK_I16_XZ: [u8; 84] = [
+    const TEST_CHUNK_I16_XZ: [u8; 84] = [
         0x00, 0x00,
         0x00, 0x03,
         0x00, 0x00, 0x00, 0x01,
@@ -75,23 +75,23 @@ mod tests {
     ];
 
     #[test]
-    fn test_read_doc_spec_block() {
-        crate::tests::test_read_doc_spec_block(
-            TEST_BLOCK_I16_XZ.as_ref(),
+    fn test_read_doc_spec_chunk() {
+        crate::tests::test_read_doc_spec_chunk(
+            TEST_CHUNK_I16_XZ.as_ref(),
             CompressionType::Xz(XzCompression::default()),
         );
     }
 
     #[test]
-    fn test_write_doc_spec_block() {
-        crate::tests::test_write_doc_spec_block(
-            TEST_BLOCK_I16_XZ.as_ref(),
+    fn test_write_doc_spec_chunk() {
+        crate::tests::test_write_doc_spec_chunk(
+            TEST_CHUNK_I16_XZ.as_ref(),
             CompressionType::Xz(XzCompression::default()),
         );
     }
 
     #[test]
     fn test_rw() {
-        crate::tests::test_block_compression_rw(CompressionType::Xz(XzCompression::default()));
+        crate::tests::test_chunk_compression_rw(CompressionType::Xz(XzCompression::default()));
     }
 }

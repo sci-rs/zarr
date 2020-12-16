@@ -27,24 +27,24 @@ use walkdir::WalkDir;
 
 use crate::{
     is_version_compatible,
-    DataBlock,
-    DataBlockMetadata,
+    DataChunk,
+    DataChunkMetadata,
     DatasetAttributes,
-    DefaultBlockReader,
-    DefaultBlockWriter,
+    DefaultChunkReader,
+    DefaultChunkWriter,
     EntryPointMetadata,
     GridCoord,
     Hierarchy,
     N5Lister,
     N5Reader,
     N5Writer,
-    ReadableDataBlock,
+    ReadableDataChunk,
     ReadableStore,
     ReflectedType,
-    ReinitDataBlock,
-    VecDataBlock,
+    ReinitDataChunk,
+    VecDataChunk,
     Version,
-    WriteableDataBlock,
+    WriteableDataChunk,
     WriteableStore,
 };
 
@@ -209,7 +209,7 @@ impl N5Filesystem {
         }
     }
 
-    fn get_data_block_path(&self, path_name: &str, grid_position: &[u64]) -> Result<PathBuf> {
+    fn get_data_chunk_path(&self, path_name: &str, grid_position: &[u64]) -> Result<PathBuf> {
         let mut path = self.get_path(path_name)?;
         for coord in grid_position {
             path.push(coord.to_string());
@@ -268,31 +268,31 @@ impl ReadableStore for N5Filesystem {
 //         Ok(target.is_dir())
 //     }
 
-//     fn get_block_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String> {
-//         self.get_data_block_path(path_name, grid_position)?
+//     fn get_chunk_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String> {
+//         self.get_data_chunk_path(path_name, grid_position)?
 //             .to_str()
 //             // TODO: could use URL crate and `from_file_path` here.
 //             .map(|s| format!("file://{}", s))
 //             .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Paths must be UTF-8"))
 //     }
 
-//     fn read_block<T>(
+//     fn read_chunk<T>(
 //         &self,
 //         path_name: &str,
 //         data_attrs: &DatasetAttributes,
 //         grid_position: GridCoord,
-//     ) -> Result<Option<VecDataBlock<T>>>
+//     ) -> Result<Option<VecDataChunk<T>>>
 //     where
-//         VecDataBlock<T>: DataBlock<T> + ReadableDataBlock,
+//         VecDataChunk<T>: DataChunk<T> + ReadableDataChunk,
 //         T: ReflectedType,
 //     {
-//         let block_file = self.get_data_block_path(path_name, &grid_position)?;
-//         if block_file.is_file() {
-//             let file = File::open(block_file)?;
+//         let chunk_file = self.get_data_chunk_path(path_name, &grid_position)?;
+//         if chunk_file.is_file() {
+//             let file = File::open(chunk_file)?;
 //             file.lock_shared()?;
 //             let reader = BufReader::new(file);
 //             Ok(Some(
-//                 <crate::DefaultBlock as DefaultBlockReader<T, _>>::read_block(
+//                 <crate::DefaultChunk as DefaultChunkReader<T, _>>::read_chunk(
 //                     reader,
 //                     data_attrs,
 //                     grid_position,
@@ -303,26 +303,26 @@ impl ReadableStore for N5Filesystem {
 //         }
 //     }
 
-//     fn read_block_into<
+//     fn read_chunk_into<
 //         T: ReflectedType,
-//         B: DataBlock<T> + ReinitDataBlock<T> + ReadableDataBlock,
+//         B: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
 //     >(
 //         &self,
 //         path_name: &str,
 //         data_attrs: &DatasetAttributes,
 //         grid_position: GridCoord,
-//         block: &mut B,
+//         chunk: &mut B,
 //     ) -> Result<Option<()>> {
-//         let block_file = self.get_data_block_path(path_name, &grid_position)?;
-//         if block_file.is_file() {
-//             let file = File::open(block_file)?;
+//         let chunk_file = self.get_data_chunk_path(path_name, &grid_position)?;
+//         if chunk_file.is_file() {
+//             let file = File::open(chunk_file)?;
 //             file.lock_shared()?;
 //             let reader = BufReader::new(file);
-//             <crate::DefaultBlock as DefaultBlockReader<T, _>>::read_block_into(
+//             <crate::DefaultChunk as DefaultChunkReader<T, _>>::read_chunk_into(
 //                 reader,
 //                 data_attrs,
 //                 grid_position,
-//                 block,
+//                 chunk,
 //             )?;
 //             Ok(Some(()))
 //         } else {
@@ -330,16 +330,16 @@ impl ReadableStore for N5Filesystem {
 //         }
 //     }
 
-//     fn block_metadata(
+//     fn chunk_metadata(
 //         &self,
 //         path_name: &str,
 //         _data_attrs: &DatasetAttributes,
 //         grid_position: &[u64],
-//     ) -> Result<Option<DataBlockMetadata>> {
-//         let block_file = self.get_data_block_path(path_name, grid_position)?;
-//         if block_file.is_file() {
-//             let metadata = std::fs::metadata(block_file)?;
-//             Ok(Some(DataBlockMetadata {
+//     ) -> Result<Option<DataChunkMetadata>> {
+//         let chunk_file = self.get_data_chunk_path(path_name, grid_position)?;
+//         if chunk_file.is_file() {
+//             let metadata = std::fs::metadata(chunk_file)?;
+//             Ok(Some(DataChunkMetadata {
 //                 created: metadata.created().ok(),
 //                 accessed: metadata.accessed().ok(),
 //                 modified: metadata.modified().ok(),
@@ -492,14 +492,14 @@ impl WriteableStore for N5Filesystem {
 //         Ok(())
 //     }
 
-//     fn write_block<T: ReflectedType, B: DataBlock<T> + WriteableDataBlock>(
+//     fn write_chunk<T: ReflectedType, B: DataChunk<T> + WriteableDataChunk>(
 //         &self,
 //         path_name: &str,
 //         data_attrs: &DatasetAttributes,
-//         block: &B,
+//         chunk: &B,
 //     ) -> Result<()> {
-//         let path = self.get_data_block_path(path_name, block.get_grid_position())?;
-//         fs::create_dir_all(path.parent().expect("TODO: root block path?"))?;
+//         let path = self.get_data_chunk_path(path_name, chunk.get_grid_position())?;
+//         fs::create_dir_all(path.parent().expect("TODO: root chunk path?"))?;
 
 //         let file = fs::OpenOptions::new()
 //             .read(true)
@@ -511,12 +511,12 @@ impl WriteableStore for N5Filesystem {
 //         file.set_len(0)?;
 
 //         let buffer = BufWriter::new(file);
-//         <crate::DefaultBlock as DefaultBlockWriter<T, _, _>>::write_block(buffer, data_attrs, block)
+//         <crate::DefaultChunk as DefaultChunkWriter<T, _, _>>::write_chunk(buffer, data_attrs, chunk)
 //     }
 
 //     // TODO
-//     // fn delete_block(&self, path_name: &str, grid_position: &[u64]) -> Result<bool> {
-//     //     let path = self.get_data_block_path(path_name, grid_position)?;
+//     // fn delete_chunk(&self, path_name: &str, grid_position: &[u64]) -> Result<bool> {
+//     //     let path = self.get_data_chunk_path(path_name, grid_position)?;
 
 //     //     if path.exists() {
 //     //         let file = fs::OpenOptions::new().read(true).open(&path)?;
@@ -623,18 +623,18 @@ mod tests {
     }
 
     #[test]
-    fn test_get_block_uri() {
+    fn test_get_chunk_uri() {
         let dir = TempDir::new("rust_n5_tests").unwrap();
         let path_str = dir.path().to_str().unwrap();
 
         let create =
             N5Filesystem::open_or_create(path_str).expect("Failed to create N5 filesystem");
-        let uri = create.get_block_uri("foo/bar", &vec![1, 2, 3]).unwrap();
+        let uri = create.get_chunk_uri("foo/bar", &vec![1, 2, 3]).unwrap();
         assert_eq!(uri, format!("file://{}/foo/bar/1/2/3", path_str));
     }
 
     #[test]
-    pub(crate) fn short_block_truncation() {
+    pub(crate) fn short_chunk_truncation() {
         let wrapper = N5Filesystem::temp_new_rw();
         let create = wrapper.as_ref();
         let data_attrs = DatasetAttributes::new(
@@ -645,51 +645,51 @@ mod tests {
                 crate::compression::raw::RawCompression::default(),
             ),
         );
-        let block_data: Vec<i32> = (0..125_i32).collect();
-        let block_in = crate::SliceDataBlock::new(
-            data_attrs.chunk_grid.block_size.clone(),
+        let chunk_data: Vec<i32> = (0..125_i32).collect();
+        let chunk_in = crate::SliceDataChunk::new(
+            data_attrs.chunk_grid.chunk_size.clone(),
             smallvec![0, 0, 0],
-            &block_data,
+            &chunk_data,
         );
 
         create
             .create_dataset("foo/bar", &data_attrs)
             .expect("Failed to create dataset");
         create
-            .write_block("foo/bar", &data_attrs, &block_in)
-            .expect("Failed to write block");
+            .write_chunk("foo/bar", &data_attrs, &chunk_in)
+            .expect("Failed to write chunk");
 
         let read = create.open_reader();
-        let block_out = read
-            .read_block::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 0])
-            .expect("Failed to read block")
-            .expect("Block is empty");
-        let missing_block_out = read
-            .read_block::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 1])
-            .expect("Failed to read block");
+        let chunk_out = read
+            .read_chunk::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 0])
+            .expect("Failed to read chunk")
+            .expect("Chunk is empty");
+        let missing_chunk_out = read
+            .read_chunk::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 1])
+            .expect("Failed to read chunk");
 
-        assert_eq!(block_out.get_data(), &block_data[..]);
-        assert!(missing_block_out.is_none());
+        assert_eq!(chunk_out.get_data(), &chunk_data[..]);
+        assert!(missing_chunk_out.is_none());
 
         // Shorten data (this still will not catch trailing data less than the length).
-        let block_data: Vec<i32> = (0..10_i32).collect();
-        let block_in = crate::SliceDataBlock::new(
-            data_attrs.chunk_grid.block_size.clone(),
+        let chunk_data: Vec<i32> = (0..10_i32).collect();
+        let chunk_in = crate::SliceDataChunk::new(
+            data_attrs.chunk_grid.chunk_size.clone(),
             smallvec![0, 0, 0],
-            &block_data,
+            &chunk_data,
         );
         create
-            .write_block("foo/bar", &data_attrs, &block_in)
-            .expect("Failed to write block");
+            .write_chunk("foo/bar", &data_attrs, &chunk_in)
+            .expect("Failed to write chunk");
 
-        let block_file = create.get_data_block_path("foo/bar", &[0, 0, 0]).unwrap();
-        let file = File::open(block_file).unwrap();
+        let chunk_file = create.get_data_chunk_path("foo/bar", &[0, 0, 0]).unwrap();
+        let file = File::open(chunk_file).unwrap();
         let metadata = file.metadata().unwrap();
 
         let header_len = 2 * std::mem::size_of::<u16>() + 4 * std::mem::size_of::<u32>();
         assert_eq!(
             metadata.len(),
-            (header_len + block_data.len() * std::mem::size_of::<i32>()) as u64
+            (header_len + chunk_data.len() * std::mem::size_of::<i32>()) as u64
         );
     }
 }

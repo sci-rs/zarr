@@ -98,7 +98,7 @@ mod tests {
     use crate::compression::CompressionType;
 
     #[rustfmt::skip]
-    const TEST_BLOCK_I16_LZ4: [u8; 47] = [
+    const TEST_CHUNK_I16_LZ4: [u8; 47] = [
         0x00, 0x00,
         0x00, 0x03,
         0x00, 0x00, 0x00, 0x01,
@@ -115,23 +115,23 @@ mod tests {
     ];
 
     #[test]
-    fn test_read_doc_spec_block() {
-        crate::tests::test_read_doc_spec_block(
-            TEST_BLOCK_I16_LZ4.as_ref(),
+    fn test_read_doc_spec_chunk() {
+        crate::tests::test_read_doc_spec_chunk(
+            TEST_CHUNK_I16_LZ4.as_ref(),
             CompressionType::Lz4(Lz4Compression::default()),
         );
     }
 
     #[test]
-    fn test_write_doc_spec_block() {
-        crate::tests::test_write_doc_spec_block(
-            TEST_BLOCK_I16_LZ4.as_ref(),
+    fn test_write_doc_spec_chunk() {
+        crate::tests::test_write_doc_spec_chunk(
+            TEST_CHUNK_I16_LZ4.as_ref(),
             CompressionType::Lz4(Lz4Compression::default()),
         );
     }
 
     #[test]
     fn test_rw() {
-        crate::tests::test_block_compression_rw(CompressionType::Lz4(Lz4Compression::default()));
+        crate::tests::test_chunk_compression_rw(CompressionType::Lz4(Lz4Compression::default()));
     }
 }

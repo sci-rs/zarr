@@ -1,4 +1,4 @@
-//! Compression for block voxel data.
+//! Compression for chunk voxel data.
 
 use std::io::{
     Read,

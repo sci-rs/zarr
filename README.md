@@ -26,28 +26,28 @@ use n5::smallvec::smallvec;
 fn n5_roundtrip(root_path: &str) -> std::io::Result<()> {
     let n = N5Filesystem::open_or_create(root_path)?;
 
-    let block_size = smallvec![44, 33, 22];
+    let chunk_size = smallvec![44, 33, 22];
     let data_attrs = DatasetAttributes::new(
         smallvec![100, 200, 300],
-        block_size.clone(),
+        chunk_size.clone(),
         DataType::INT16,
         CompressionType::default(),
     );
-    let block_data = vec![0i16; data_attrs.get_block_num_elements()];
+    let chunk_data = vec![0i16; data_attrs.get_chunk_num_elements()];
 
-    let block_in = SliceDataBlock::new(
-        block_size,
+    let chunk_in = SliceDataChunk::new(
+        chunk_size,
         smallvec![0, 0, 0],
-        &block_data);
+        &chunk_data);
 
     let path_name = "/test/dataset/group";
 
     n.create_dataset(path_name, &data_attrs)?;
-    n.write_block(path_name, &data_attrs, &block_in)?;
+    n.write_chunk(path_name, &data_attrs, &chunk_in)?;
 
-    let block_out = n.read_block::<i16>(path_name, &data_attrs, smallvec![0, 0, 0])?
-        .expect("Block is empty");
-    assert_eq!(block_out.get_data(), &block_data[..]);
+    let chunk_out = n.read_chunk::<i16>(path_name, &data_attrs, smallvec![0, 0, 0])?
+        .expect("Chunk is empty");
+    assert_eq!(chunk_out.get_data(), &chunk_data[..]);
 
     Ok(())
 }

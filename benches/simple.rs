@@ -12,16 +12,16 @@ use test::Bencher;
 use n5::prelude::*;
 use n5::smallvec::smallvec;
 use n5::{
-    DefaultBlock,
-    DefaultBlockReader,
-    DefaultBlockWriter,
+    DefaultChunk,
+    DefaultChunkReader,
+    DefaultChunkWriter,
 };
 
-fn test_block_compression_rw<T>(compression: compression::CompressionType, b: &mut Bencher)
+fn test_chunk_compression_rw<T>(compression: compression::CompressionType, b: &mut Bencher)
 where
     T: 'static + std::fmt::Debug + ReflectedType + PartialEq + Default,
     rand::distributions::Standard: rand::distributions::Distribution<T>,
-    VecDataBlock<T>: n5::ReadableDataBlock + n5::WriteableDataBlock,
+    VecDataChunk<T>: n5::ReadableDataChunk + n5::WriteableDataChunk,
 {
     let data_attrs = DatasetAttributes::new(
         smallvec![1024, 1024, 1024],
@@ -29,48 +29,48 @@ where
         T::VARIANT,
         compression,
     );
-    let numel = data_attrs.get_block_num_elements();
+    let numel = data_attrs.get_chunk_num_elements();
     let rng = rand::thread_rng();
-    let block_data: Vec<T> = rng.sample_iter(&Standard).take(numel).collect();
+    let chunk_data: Vec<T> = rng.sample_iter(&Standard).take(numel).collect();
 
-    let block_in = VecDataBlock::new(
-        data_attrs.get_block_size().into(),
+    let chunk_in = VecDataChunk::new(
+        data_attrs.get_chunk_size().into(),
         smallvec![0, 0, 0],
-        block_data.clone(),
+        chunk_data.clone(),
     );
 
     let mut inner: Vec<u8> = Vec::new();
 
     b.iter(|| {
-        DefaultBlock::write_block(&mut inner, &data_attrs, &block_in).expect("write_block failed");
+        DefaultChunk::write_chunk(&mut inner, &data_attrs, &chunk_in).expect("write_chunk failed");
 
-        let _block_out = <DefaultBlock as DefaultBlockReader<T, _>>::read_block(
+        let _chunk_out = <DefaultChunk as DefaultChunkReader<T, _>>::read_chunk(
             &inner[..],
             &data_attrs,
             smallvec![0, 0, 0],
         )
-        .expect("read_block failed");
+        .expect("read_chunk failed");
     });
 
-    b.bytes = (data_attrs.get_block_num_elements() * data_attrs.get_data_type().size_of()) as u64;
+    b.bytes = (data_attrs.get_chunk_num_elements() * data_attrs.get_data_type().size_of()) as u64;
 }
 
 #[bench]
 fn simple_rw_i8_raw(b: &mut Bencher) {
-    test_block_compression_rw::<i8>(compression::raw::RawCompression.into(), b);
+    test_chunk_compression_rw::<i8>(compression::raw::RawCompression.into(), b);
 }
 
 #[bench]
 fn simple_rw_i16_raw(b: &mut Bencher) {
-    test_block_compression_rw::<i16>(compression::raw::RawCompression.into(), b);
+    test_chunk_compression_rw::<i16>(compression::raw::RawCompression.into(), b);
 }
 
 #[bench]
 fn simple_rw_i32_raw(b: &mut Bencher) {
-    test_block_compression_rw::<i32>(compression::raw::RawCompression.into(), b);
+    test_chunk_compression_rw::<i32>(compression::raw::RawCompression.into(), b);
 }
 
 #[bench]
 fn simple_rw_i64_raw(b: &mut Bencher) {
-    test_block_compression_rw::<i64>(compression::raw::RawCompression.into(), b);
+    test_chunk_compression_rw::<i64>(compression::raw::RawCompression.into(), b);
 }
