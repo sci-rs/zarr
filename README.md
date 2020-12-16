@@ -20,17 +20,17 @@ use zarr::smallvec::smallvec;
 fn zarr_roundtrip(root_path: &str) -> std::io::Result<()> {
     let n = FilesystemHierarchy::open_or_create(root_path)?;
 
-    let chunk_size = smallvec![44, 33, 22];
+    let chunk_shape = smallvec![44, 33, 22];
     let array_meta = ArrayMetadata::new(
         smallvec![100, 200, 300],
-        chunk_size.clone(),
+        chunk_shape.clone(),
         DataType::INT16,
         CompressionType::default(),
     );
     let chunk_data = vec![0i16; array_meta.get_chunk_num_elements()];
 
     let chunk_in = SliceDataChunk::new(
-        chunk_size,
+        chunk_shape,
         smallvec![0, 0, 0],
         &chunk_data);
 

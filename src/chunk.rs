@@ -237,7 +237,7 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read>:
         let header = Self::read_chunk_header(&mut buffer, grid_position)?;
 
         let mut chunk = T::create_data_chunk(header);
-        let mut decompressed = array_meta.compression.decoder(buffer);
+        let mut decompressed = array_meta.compressor.decoder(buffer);
         chunk.read_data(&mut decompressed)?;
 
         Ok(chunk)
@@ -258,7 +258,7 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read>:
         let header = Self::read_chunk_header(&mut buffer, grid_position)?;
 
         chunk.reinitialize(header);
-        let mut decompressed = array_meta.compression.decoder(buffer);
+        let mut decompressed = array_meta.compressor.decoder(buffer);
         chunk.read_data(&mut decompressed)?;
 
         Ok(())
@@ -295,7 +295,7 @@ pub trait DefaultChunkWriter<
             buffer.write_u32::<ZarrEndian>(chunk.get_num_elements())?;
         }
 
-        let mut compressor = array_meta.compression.encoder(buffer);
+        let mut compressor = array_meta.compressor.encoder(buffer);
         chunk.write_data(&mut compressor)?;
 
         Ok(())

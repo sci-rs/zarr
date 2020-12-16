@@ -26,11 +26,11 @@ pub use crate::{
     },
     ArrayMetadata,
     ChunkCoord,
-    DataChunkMetadata,
     DataType,
     GridCoord,
     HierarchyLister,
     HierarchyReader,
     HierarchyWriter,
     ReflectedType,
+    StoreNodeMetadata,
 };

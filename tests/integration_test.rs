@@ -15,10 +15,10 @@ fn test_read_write<T, Zarr: HierarchyReader + HierarchyWriter>(
     rand::distributions::Standard: rand::distributions::Distribution<T>,
     VecDataChunk<T>: zarr::chunk::ReadableDataChunk + zarr::chunk::WriteableDataChunk,
 {
-    let chunk_size: ChunkCoord = (1..=dim as u32).rev().map(|d| d * 5).collect();
+    let chunk_shape: ChunkCoord = (1..=dim as u32).rev().map(|d| d * 5).collect();
     let array_meta = ArrayMetadata::new(
         (1..=dim as u64).map(|d| d * 100).collect(),
-        chunk_size.clone(),
+        chunk_shape.clone(),
         T::VARIANT,
         compression.clone(),
     );
@@ -26,7 +26,7 @@ fn test_read_write<T, Zarr: HierarchyReader + HierarchyWriter>(
     let rng = rand::thread_rng();
     let chunk_data: Vec<T> = rng.sample_iter(&Standard).take(numel).collect();
 
-    let chunk_in = SliceDataChunk::new(chunk_size, smallvec![0; dim], chunk_data);
+    let chunk_in = SliceDataChunk::new(chunk_shape, smallvec![0; dim], chunk_data);
 
     let path_name = "test/array/group";
 

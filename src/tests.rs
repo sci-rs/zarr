@@ -54,7 +54,7 @@ pub(crate) fn test_read_doc_spec_chunk(chunk: &[u8], compression: compression::C
     )
     .expect("read_chunk failed");
 
-    assert_eq!(chunk.get_size(), array_meta.get_chunk_size());
+    assert_eq!(chunk.get_size(), array_meta.get_chunk_shape());
     assert_eq!(chunk.get_grid_position(), &[0, 0, 0]);
     assert_eq!(chunk.get_data(), &DOC_SPEC_CHUNK_DATA);
 }
@@ -65,7 +65,7 @@ pub(crate) fn test_write_doc_spec_chunk(
 ) {
     let array_meta = doc_spec_array_attributes(compression);
     let chunk_in = SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_shape.clone(),
         smallvec![0, 0, 0],
         DOC_SPEC_CHUNK_DATA,
     );
@@ -86,7 +86,7 @@ pub(crate) fn test_chunk_compression_rw(compression: compression::CompressionTyp
     );
     let chunk_data: Vec<i32> = (0..125_i32).collect();
     let chunk_in = SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_shape.clone(),
         smallvec![0, 0, 0],
         &chunk_data,
     );
@@ -121,7 +121,7 @@ pub(crate) fn test_varlength_chunk_rw(compression: compression::CompressionType)
     );
     let chunk_data: Vec<i32> = (0..100_i32).collect();
     let chunk_in = SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_shape.clone(),
         smallvec![0, 0, 0],
         &chunk_data,
     );
@@ -297,7 +297,7 @@ pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
     );
     let chunk_data: Vec<i32> = (0..125_i32).collect();
     let chunk_in = crate::SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_shape.clone(),
         smallvec![0, 0, 0],
         &chunk_data,
     );
@@ -324,7 +324,7 @@ pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
     // Shorten data (this still will not catch trailing data less than the length).
     let chunk_data: Vec<i32> = (0..10_i32).collect();
     let chunk_in = crate::SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_shape.clone(),
         smallvec![0, 0, 0],
         &chunk_data,
     );
@@ -355,7 +355,7 @@ pub(crate) fn delete_chunk<N: ZarrTestable>() {
     let array = "foo/bar";
     let chunk_data: Vec<i32> = (0..125_i32).collect();
     let chunk_in = crate::SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_shape.clone(),
         coord_a.clone(),
         &chunk_data,
     );

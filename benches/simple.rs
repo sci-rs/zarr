@@ -36,7 +36,7 @@ where
     let chunk_data: Vec<T> = rng.sample_iter(&Standard).take(numel).collect();
 
     let chunk_in = VecDataChunk::new(
-        array_meta.get_chunk_size().into(),
+        array_meta.get_chunk_shape().into(),
         smallvec![0, 0, 0],
         chunk_data.clone(),
     );

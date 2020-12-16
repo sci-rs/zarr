@@ -42,22 +42,22 @@ pub mod prelude {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoundingBox {
     offset: GridCoord,
-    size: GridCoord,
+    shape: GridCoord,
 }
 
 impl BoundingBox {
-    pub fn new(offset: GridCoord, size: GridCoord) -> BoundingBox {
-        assert_eq!(offset.len(), size.len());
+    pub fn new(offset: GridCoord, shape: GridCoord) -> BoundingBox {
+        assert_eq!(offset.len(), shape.len());
 
-        BoundingBox { offset, size }
+        BoundingBox { offset, shape }
     }
 
-    pub fn size_chunk(&self) -> ChunkCoord {
-        self.size.iter().map(|n| *n as u32).collect()
+    pub fn shape_chunk(&self) -> ChunkCoord {
+        self.shape.iter().map(|n| *n as u32).collect()
     }
 
-    pub fn size_ndarray_shape(&self) -> CoordVec<usize> {
-        self.size.iter().map(|n| *n as usize).collect()
+    pub fn shape_ndarray_shape(&self) -> CoordVec<usize> {
+        self.shape.iter().map(|n| *n as usize).collect()
     }
 
     /// ```
@@ -72,10 +72,10 @@ impl BoundingBox {
     pub fn intersect(&mut self, other: &BoundingBox) {
         assert_eq!(self.offset.len(), other.offset.len());
 
-        self.size
+        self.shape
             .iter_mut()
             .zip(self.offset.iter_mut())
-            .zip(other.size.iter())
+            .zip(other.shape.iter())
             .zip(other.offset.iter())
             .for_each(|(((s, o), os), oo)| {
                 let new_o = std::cmp::max(*oo, *o);
@@ -96,10 +96,10 @@ impl BoundingBox {
     pub fn union(&mut self, other: &BoundingBox) {
         assert_eq!(self.offset.len(), other.offset.len());
 
-        self.size
+        self.shape
             .iter_mut()
             .zip(self.offset.iter_mut())
-            .zip(other.size.iter())
+            .zip(other.shape.iter())
             .zip(other.offset.iter())
             .for_each(|(((s, o), os), oo)| {
                 let new_o = std::cmp::min(*oo, *o);
@@ -109,7 +109,10 @@ impl BoundingBox {
     }
 
     pub fn end(&self) -> impl Iterator<Item = u64> + '_ {
-        self.offset.iter().zip(self.size.iter()).map(|(o, s)| o + s)
+        self.offset
+            .iter()
+            .zip(self.shape.iter())
+            .map(|(o, s)| o + s)
     }
 
     pub fn to_ndarray_slice(&self) -> CoordVec<ndarray::SliceOrIndex> {
@@ -125,7 +128,7 @@ impl BoundingBox {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.size.contains(&0)
+        self.shape.contains(&0)
     }
 }
 
@@ -140,7 +143,7 @@ impl Sub<&GridCoord> for BoundingBox {
                 .zip(other.iter())
                 .map(|(s, o)| s.checked_sub(*o).unwrap())
                 .collect(),
-            size: self.size.clone(),
+            shape: self.shape.clone(),
         }
     }
 }
@@ -160,7 +163,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
         VecDataChunk<T>: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
         T: ReflectedType + num_traits::identities::Zero,
     {
-        let mut arr = Array::zeros(bbox.size_ndarray_shape().f());
+        let mut arr = Array::zeros(bbox.shape_ndarray_shape().f());
 
         self.read_ndarray_into(path_name, array_meta, bbox, arr.view_mut())?;
 
@@ -211,7 +214,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
             ));
         }
 
-        if bbox.size_ndarray_shape().as_slice() != arr.shape() {
+        if bbox.shape_ndarray_shape().as_slice() != arr.shape() {
             return Err(Error::new(
                 ErrorKind::InvalidData,
                 "Bounding box and array have different shape",
@@ -258,7 +261,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
 
                 // Zarr arrays are stored f-order/column-major.
                 let chunk_data =
-                    ArrayView::from_shape(chunk_bb.size_ndarray_shape().f(), chunk.get_data())
+                    ArrayView::from_shape(chunk_bb.shape_ndarray_shape().f(), chunk.get_data())
                         .expect("TODO: chunk ndarray failed");
                 let chunk_view =
                     chunk_data.slice(SliceInfo::<_, IxDyn>::new(chunk_slice).unwrap().as_ref());
@@ -299,7 +302,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
         }
         let bbox = BoundingBox {
             offset,
-            size: array.shape().iter().map(|n| *n as u64).collect(),
+            shape: array.shape().iter().map(|n| *n as u64).collect(),
         };
 
         let mut chunk_vec: Vec<T> = Vec::new();
@@ -319,7 +322,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                 // going to be entirely overwriten.
                 chunk_vec.clear();
                 chunk_vec.extend(arr_view.t().iter().cloned());
-                let chunk = VecDataChunk::new(write_bb.size_chunk(), coord.into(), chunk_vec);
+                let chunk = VecDataChunk::new(write_bb.shape_chunk(), coord.into(), chunk_vec);
 
                 self.write_chunk(path_name, array_meta, &chunk)?;
                 chunk_vec = chunk.into_data();
@@ -330,7 +333,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                     Some(chunk) => {
                         let chunk_bb = chunk.get_bounds(array_meta);
                         let chunk_array = Array::from_shape_vec(
-                            chunk_bb.size_ndarray_shape().f(),
+                            chunk_bb.shape_ndarray_shape().f(),
                             chunk.into_data(),
                         )
                         .expect("TODO: chunk ndarray failed");
@@ -340,16 +343,16 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                         // If no chunk exists, need to write from its origin.
                         let mut chunk_bb = write_bb.clone();
                         chunk_bb
-                            .size
+                            .shape
                             .iter_mut()
                             .zip(write_bb.offset.iter())
                             .zip(nom_chunk_bb.offset.iter())
                             .for_each(|((s, o), g)| *s += *o - *g);
                         chunk_bb.offset = nom_chunk_bb.offset.clone();
-                        let chunk_size_usize = chunk_bb.size_ndarray_shape();
+                        let chunk_shape_usize = chunk_bb.shape_ndarray_shape();
 
                         let chunk_array =
-                            Array::from_elem(&chunk_size_usize[..], fill_val.clone()).into_dyn();
+                            Array::from_elem(&chunk_shape_usize[..], fill_val.clone()).into_dyn();
                         (chunk_bb, chunk_array)
                     }
                 };
@@ -363,7 +366,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
 
                 chunk_vec.clear();
                 chunk_vec.extend(chunk_array.t().iter().cloned());
-                let chunk = VecDataChunk::new(chunk_bb.size_chunk(), coord.into(), chunk_vec);
+                let chunk = VecDataChunk::new(chunk_bb.shape_chunk(), coord.into(), chunk_vec);
 
                 self.write_chunk(path_name, array_meta, &chunk)?;
                 chunk_vec = chunk.into_data();
@@ -381,7 +384,7 @@ impl ArrayMetadata {
         let coord_ceil = self
             .get_shape()
             .iter()
-            .zip(self.get_chunk_size().iter())
+            .zip(self.get_chunk_shape().iter())
             .map(|(&d, &s)| (d + u64::from(s) - 1) / u64::from(s))
             .collect::<GridCoord>();
 
@@ -395,14 +398,14 @@ impl ArrayMetadata {
         let floor_coord: GridCoord = bbox
             .offset
             .iter()
-            .zip(&self.chunk_grid.chunk_size)
+            .zip(&self.chunk_grid.chunk_shape)
             .map(|(&o, &bs)| o / u64::from(bs))
             .collect();
         let ceil_coord: GridCoord = bbox
             .offset
             .iter()
-            .zip(&bbox.size)
-            .zip(self.chunk_grid.chunk_size.iter().cloned().map(u64::from))
+            .zip(&bbox.shape)
+            .zip(self.chunk_grid.chunk_shape.iter().cloned().map(u64::from))
             .map(|((&o, &s), bs)| (o + s + bs - 1) / bs)
             .collect();
 
@@ -412,23 +415,24 @@ impl ArrayMetadata {
     pub fn get_bounds(&self) -> BoundingBox {
         BoundingBox {
             offset: smallvec![0; self.shape.len()],
-            size: self.shape.clone(),
+            shape: self.shape.clone(),
         }
     }
 
     pub fn get_chunk_bounds(&self, coord: &[u64]) -> BoundingBox {
-        let mut size: GridCoord = self
-            .get_chunk_size()
+        let mut shape: GridCoord = self
+            .get_chunk_shape()
             .iter()
             .cloned()
             .map(u64::from)
             .collect();
-        let offset: GridCoord = coord.iter().zip(size.iter()).map(|(c, s)| c * s).collect();
-        size.iter_mut()
+        let offset: GridCoord = coord.iter().zip(shape.iter()).map(|(c, s)| c * s).collect();
+        shape
+            .iter_mut()
             .zip(offset.iter())
             .zip(self.get_shape().iter())
             .for_each(|((s, o), d)| *s = cmp::min(*s + *o, *d) - *o);
-        BoundingBox { offset, size }
+        BoundingBox { offset, shape }
     }
 }
 
@@ -437,7 +441,7 @@ impl<T: ReflectedType, C: AsRef<[T]>> SliceDataChunk<T, C> {
     /// be smaller than the nominal bounding box expected from the array.
     pub fn get_bounds(&self, array_meta: &ArrayMetadata) -> BoundingBox {
         let mut bbox = array_meta.get_chunk_bounds(self.get_grid_position());
-        bbox.size = self.get_size().iter().cloned().map(u64::from).collect();
+        bbox.shape = self.get_size().iter().cloned().map(u64::from).collect();
         bbox
     }
 }

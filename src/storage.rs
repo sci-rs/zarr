@@ -17,13 +17,13 @@ use crate::{
         WriteableDataChunk,
     },
     ArrayMetadata,
-    DataChunkMetadata,
     GridCoord,
     GroupMetadata,
     Hierarchy,
     HierarchyReader,
     HierarchyWriter,
     ReflectedType,
+    StoreNodeMetadata,
 };
 
 pub trait ReadableStore {
@@ -196,12 +196,12 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
             .transpose()
     }
 
-    fn chunk_metadata(
+    fn store_chunk_metadata(
         &self,
         path_name: &str,
         array_meta: &ArrayMetadata,
         grid_position: &[u64],
-    ) -> Result<Option<DataChunkMetadata>, Error> {
+    ) -> Result<Option<StoreNodeMetadata>, Error> {
         todo!()
     }
 

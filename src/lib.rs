@@ -66,7 +66,7 @@ pub type GridCoord = CoordVec<u64>;
 
 type ZarrEndian = BigEndian;
 
-/// Version of the Java Zarr spec supported by this library.
+/// Version of the Zarr spec supported by this library.
 pub const VERSION: Version = Version {
     major: 3,
     minor: 0,
@@ -74,12 +74,6 @@ pub const VERSION: Version = Version {
     pre: Vec::new(),
     build: Vec::new(),
 };
-
-/// Determines whether a version of an Zarr implementation is capable of accessing
-/// a version of an Zarr hierarchy (`other`).
-pub fn is_version_compatible(s: &Version, other: &Version) -> bool {
-    other.major <= s.major
-}
 
 // TODO: from https://users.rust-lang.org/t/append-an-additional-extension/23586/12
 fn add_extension(path: &mut std::path::PathBuf, extension: impl AsRef<std::path::Path>) {
@@ -94,20 +88,18 @@ fn add_extension(path: &mut std::path::PathBuf, extension: impl AsRef<std::path:
     };
 }
 
-/// Key name for the version attribute in the hierarchy root.
-pub const VERSION_ATTRIBUTE_KEY: &str = "zarr";
 const DATA_ROOT_PATH: &str = "/data/root";
 const META_ROOT_PATH: &str = "/meta/root";
 const ARRAY_METADATA_PATH: &str = ".array";
 const GROUP_METADATA_PATH: &str = ".group";
 
-/// Container metadata about a data chunk.
+/// Store metadata about a node.
 ///
 /// This is metadata from the persistence layer of the hierarchy, such as
 /// filesystem access times and on-disk sizes, and is not to be confused with
 /// semantic metadata stored as attributes in the hierarchy.
 #[derive(Clone, Debug)]
-pub struct DataChunkMetadata {
+pub struct StoreNodeMetadata {
     pub created: Option<SystemTime>,
     pub accessed: Option<SystemTime>,
     pub modified: Option<SystemTime>,
@@ -199,13 +191,13 @@ pub trait HierarchyReader: Hierarchy {
         chunk: &mut B,
     ) -> Result<Option<()>, Error>;
 
-    /// Read metadata about a chunk.
-    fn chunk_metadata(
+    /// Read store metadata about a chunk.
+    fn store_chunk_metadata(
         &self,
         path_name: &str,
         array_meta: &ArrayMetadata,
         grid_position: &[u64],
-    ) -> Result<Option<DataChunkMetadata>, Error>;
+    ) -> Result<Option<StoreNodeMetadata>, Error>;
 
     /// List all attributes of a group.
     fn list_attributes(&self, path_name: &str) -> Result<serde_json::Value, Error>;
@@ -296,7 +288,6 @@ fn u64_ceil_div(a: u64, b: u64) -> u64 {
 
 /// Metadata for groups.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct GroupMetadata {
     extensions: Vec<serde_json::Value>,
     attributes: serde_json::Map<String, serde_json::Value>,
@@ -313,23 +304,21 @@ impl Default for GroupMetadata {
 
 /// Attributes of a tensor array.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct ArrayMetadata {
     /// Dimensions of the entire array, in voxels.
     shape: GridCoord,
     /// Element data type.
     data_type: DataType,
     /// Compression scheme for voxel data in each chunk.
-    compression: compression::CompressionType,
+    compressor: compression::CompressionType,
     /// TODO
     chunk_grid: ChunkGridMetadata,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct ChunkGridMetadata {
     /// Size of each chunk, in voxels.
-    chunk_size: ChunkCoord,
+    chunk_shape: ChunkCoord,
     /// TODO
     chunk_separator: String,
 }
@@ -337,22 +326,22 @@ pub struct ChunkGridMetadata {
 impl ArrayMetadata {
     pub fn new(
         shape: GridCoord,
-        chunk_size: ChunkCoord,
+        chunk_shape: ChunkCoord,
         data_type: DataType,
-        compression: compression::CompressionType,
+        compressor: compression::CompressionType,
     ) -> ArrayMetadata {
         assert_eq!(
             shape.len(),
-            chunk_size.len(),
-            "Number of array shape must match number of chunk size shape."
+            chunk_shape.len(),
+            "Number of array dimensions must match number of chunk size dimensions."
         );
         ArrayMetadata {
             shape,
             data_type,
-            compression,
+            compressor,
             // TODO
             chunk_grid: ChunkGridMetadata {
-                chunk_size,
+                chunk_shape,
                 chunk_separator: "/".to_owned(),
             },
         }
@@ -362,16 +351,16 @@ impl ArrayMetadata {
         &self.shape
     }
 
-    pub fn get_chunk_size(&self) -> &[u32] {
-        &self.chunk_grid.chunk_size
+    pub fn get_chunk_shape(&self) -> &[u32] {
+        &self.chunk_grid.chunk_shape
     }
 
     pub fn get_data_type(&self) -> &DataType {
         &self.data_type
     }
 
-    pub fn get_compression(&self) -> &compression::CompressionType {
-        &self.compression
+    pub fn get_compressor(&self) -> &compression::CompressionType {
+        &self.compressor
     }
 
     pub fn get_ndim(&self) -> usize {
@@ -386,7 +375,7 @@ impl ArrayMetadata {
     /// Get the total number of elements possible in a chunk.
     pub fn get_chunk_num_elements(&self) -> usize {
         self.chunk_grid
-            .chunk_size
+            .chunk_shape
             .iter()
             .map(|&d| d as usize)
             .product()
@@ -396,7 +385,7 @@ impl ArrayMetadata {
     pub fn get_grid_extent(&self) -> GridCoord {
         self.shape
             .iter()
-            .zip(self.chunk_grid.chunk_size.iter().cloned().map(u64::from))
+            .zip(self.chunk_grid.chunk_shape.iter().cloned().map(u64::from))
             .map(|(d, b)| u64_ceil_div(*d, b))
             .collect()
     }

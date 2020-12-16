@@ -70,10 +70,10 @@ where
     Zarr: HierarchyWriter + Sync + Send + Clone + 'static,
     SliceDataChunk<T, std::sync::Arc<[T]>>: WriteableDataChunk,
 {
-    let chunk_size = smallvec![CHUNK_DIM; 3];
+    let chunk_shape = smallvec![CHUNK_DIM; 3];
     let array_meta = ArrayMetadata::new(
         smallvec![u64::from(CHUNK_DIM) * N_CHUNKS; 3],
-        chunk_size.clone(),
+        chunk_shape.clone(),
         T::VARIANT,
         compression.clone(),
     );
@@ -81,7 +81,7 @@ where
     let path_name = format!(
         "array.{:?}.{}",
         array_meta.get_data_type(),
-        array_meta.get_compression()
+        array_meta.get_compressor()
     );
 
     n.create_array(&path_name, &array_meta)
@@ -95,7 +95,7 @@ where
     for x in 0..N_CHUNKS {
         for y in 0..N_CHUNKS {
             for z in 0..N_CHUNKS {
-                let bs = chunk_size.clone();
+                let bs = chunk_shape.clone();
                 let bd = bd.clone();
                 let ni = n.clone();
                 let pn = path_name.clone();

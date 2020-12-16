@@ -30,14 +30,12 @@ use crate::{
         DefaultChunkReader,
         DefaultChunkWriter,
     },
-    is_version_compatible,
     storage::{
         ReadableStore,
         WriteableStore,
     },
     ArrayMetadata,
     DataChunk,
-    DataChunkMetadata,
     EntryPointMetadata,
     GridCoord,
     Hierarchy,
@@ -47,6 +45,7 @@ use crate::{
     ReadableDataChunk,
     ReflectedType,
     ReinitDataChunk,
+    StoreNodeMetadata,
     VecDataChunk,
     Version,
     WriteableDataChunk,
@@ -87,13 +86,11 @@ impl FilesystemHierarchy {
             entry_point_metadata,
         };
 
-        // if reader.exists("")? {
-        //     let version = reader.get_version()?;
+        let version = reader.get_version()?;
 
-        //     if !is_version_compatible(&crate::VERSION, &version) {
-        //         return Err(Error::new(ErrorKind::Other, "TODO: Incompatible version"));
-        //     }
-        // }
+        if !version.matches(&crate::VERSION) {
+            return Err(Error::new(ErrorKind::Other, "TODO: Incompatible version"));
+        }
 
         Ok(reader)
     }
@@ -127,19 +124,11 @@ impl FilesystemHierarchy {
             entry_point_metadata,
         };
 
-        // if reader
-        //     .get_version()
-        //     .map(|v| !is_version_compatible(&crate::VERSION, &v))
-        //     .unwrap_or(false)
-        // {
-        //     return Err(Error::new(ErrorKind::Other, "TODO: Incompatible version"));
-        // } else {
-        //     reader.set_attribute(
-        //         "",
-        //         crate::VERSION_ATTRIBUTE_KEY.to_owned(),
-        //         crate::VERSION.to_string(),
-        //     )?;
-        // }
+        let version = reader.get_version()?;
+
+        if !version.matches(&crate::VERSION) {
+            return Err(Error::new(ErrorKind::Other, "TODO: Incompatible version"));
+        }
 
         Ok(reader)
     }
@@ -416,6 +405,9 @@ impl WriteableStore for FilesystemHierarchy {
             .write(true)
             .create(true)
             .open(target)?;
+        file.lock_exclusive()?;
+        // Truncate after the lock is acquired, rather than on opening.
+        file.set_len(0)?;
 
         let writer = BufWriter::new(file);
 
@@ -651,7 +643,7 @@ mod tests {
         );
         let chunk_data: Vec<i32> = (0..125_i32).collect();
         let chunk_in = crate::SliceDataChunk::new(
-            array_meta.chunk_grid.chunk_size.clone(),
+            array_meta.chunk_grid.chunk_shape.clone(),
             smallvec![0, 0, 0],
             &chunk_data,
         );
@@ -678,7 +670,7 @@ mod tests {
         // Shorten data (this still will not catch trailing data less than the length).
         let chunk_data: Vec<i32> = (0..10_i32).collect();
         let chunk_in = crate::SliceDataChunk::new(
-            array_meta.chunk_grid.chunk_size.clone(),
+            array_meta.chunk_grid.chunk_shape.clone(),
             smallvec![0, 0, 0],
             &chunk_data,
         );

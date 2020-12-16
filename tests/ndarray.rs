@@ -14,12 +14,13 @@ use zarr::prelude::*;
 fn test_read_ndarray() {
     let dir = tempdir::TempDir::new("rust_zarr_ndarray_tests").unwrap();
 
-    let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
+    let n =
+        FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
 
-    let chunk_size = smallvec![3, 4, 2, 1];
+    let chunk_shape = smallvec![3, 4, 2, 1];
     let array_meta = ArrayMetadata::new(
         smallvec![3, 300, 200, 100],
-        chunk_size.clone(),
+        chunk_shape.clone(),
         i32::VARIANT,
         CompressionType::default(),
     );
@@ -30,17 +31,17 @@ fn test_read_ndarray() {
         .expect("Failed to create array");
 
     for k in 0..10 {
-        let z = chunk_size[3] * k;
+        let z = chunk_shape[3] * k;
         for j in 0..10 {
-            let y = chunk_size[2] * j;
+            let y = chunk_shape[2] * j;
             for i in 0..10 {
-                let x = chunk_size[1] * i;
+                let x = chunk_shape[1] * i;
 
                 let mut chunk_data = Vec::<i32>::with_capacity(numel);
 
-                for zo in 0..chunk_size[3] {
-                    for yo in 0..chunk_size[2] {
-                        for xo in 0..chunk_size[1] {
+                for zo in 0..chunk_shape[3] {
+                    for yo in 0..chunk_shape[2] {
+                        for xo in 0..chunk_shape[1] {
                             chunk_data.push(1000 + x as i32 + xo as i32);
                             chunk_data.push(2000 + y as i32 + yo as i32);
                             chunk_data.push(3000 + z as i32 + zo as i32);
@@ -49,7 +50,7 @@ fn test_read_ndarray() {
                 }
 
                 let chunk_in = VecDataChunk::new(
-                    chunk_size.clone(),
+                    chunk_shape.clone(),
                     smallvec![0, u64::from(i), u64::from(j), u64::from(k)],
                     chunk_data,
                 );
@@ -103,12 +104,13 @@ fn test_read_ndarray() {
 fn test_read_ndarray_oob() {
     let dir = tempdir::TempDir::new("rust_zarr_ndarray_tests").unwrap();
 
-    let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
+    let n =
+        FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
 
-    let chunk_size = smallvec![50, 100];
+    let chunk_shape = smallvec![50, 100];
     let array_meta = ArrayMetadata::new(
         smallvec![100, 200],
-        chunk_size.clone(),
+        chunk_shape.clone(),
         i32::VARIANT,
         CompressionType::default(),
     );
@@ -132,12 +134,13 @@ fn test_read_ndarray_oob() {
 fn test_write_read_ndarray() {
     let dir = tempdir::TempDir::new("rust_zarr_ndarray_tests").unwrap();
 
-    let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
+    let n =
+        FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
 
-    let chunk_size = smallvec![3, 4, 2, 1];
+    let chunk_shape = smallvec![3, 4, 2, 1];
     let array_meta = ArrayMetadata::new(
         smallvec![3, 300, 200, 100],
-        chunk_size.clone(),
+        chunk_shape.clone(),
         i32::VARIANT,
         CompressionType::default(),
     );
@@ -163,7 +166,7 @@ fn test_write_read_ndarray() {
         .read_ndarray::<i32>("test/array/group", &array_meta, &bbox)
         .unwrap();
     // Also test c-order.
-    let mut a_c = Array::zeros(bbox.size_ndarray_shape().as_slice());
+    let mut a_c = Array::zeros(bbox.shape_ndarray_shape().as_slice());
     n.read_ndarray_into::<i32>("test/array/group", &array_meta, &bbox, a_c.view_mut())
         .unwrap();
 
