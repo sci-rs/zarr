@@ -229,7 +229,7 @@ impl ReadableStore for FilesystemHierarchy {
         let target = self.get_path(key)?;
         if target.is_file() {
             let file = File::open(target)?;
-            // TODO: lock
+            file.lock_shared()?;
             Ok(Some(BufReader::new(file)))
         } else {
             Ok(None)
@@ -414,8 +414,20 @@ impl WriteableStore for FilesystemHierarchy {
         value(writer)
     }
 
-    fn delete(&self, key: &str) -> Result<bool> {
+    fn erase(&self, key: &str) -> Result<bool> {
         let path = self.get_path(key)?;
+
+        if path.exists() {
+            let file = File::open(&path)?;
+            file.lock_exclusive()?;
+            fs::remove_file(&path)?;
+        }
+
+        Ok(!path.exists())
+    }
+
+    fn erase_prefix(&self, key_prefix: &str) -> Result<bool> {
+        let path = self.get_path(key_prefix)?;
 
         if path.exists() {
             for entry in WalkDir::new(&path).contents_first(true) {

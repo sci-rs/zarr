@@ -44,8 +44,11 @@ pub trait WriteableStore {
         value: F,
     ) -> Result<(), Error>;
 
-    // TODO differs from spec in that it returns a bool indicating existence of the key prior.
-    fn delete(&self, key: &str) -> Result<bool, Error>;
+    // TODO differs from spec in that it returns a bool indicating existence of the key at the end of the operation.
+    fn erase(&self, key: &str) -> Result<bool, Error>;
+
+    // TODO
+    fn erase_prefix(&self, key_prefix: &str) -> Result<bool, Error>;
 }
 
 fn get_chunk_key(base_path: &str, array_meta: &ArrayMetadata, grid_position: &[u64]) -> String {
@@ -307,7 +310,15 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
     }
 
     fn remove(&self, path_name: &str) -> Result<(), Error> {
-        self.delete(path_name).map(|_| ())
+        // TODO: needless allocs
+        let metadata_key = self.group_metadata_key(path_name);
+        self.erase(metadata_key.to_str().expect("TODO"))?;
+        let mut metadata_key = self.array_metadata_key(path_name);
+        self.erase(metadata_key.to_str().expect("TODO"))?;
+        metadata_key.set_extension("");
+        metadata_key.set_extension("");
+        self.erase_prefix(self.data_path_key(path_name).to_str().expect("TODO"))?;
+        Ok(())
     }
 
     fn write_chunk<T: ReflectedType, B: DataChunk<T> + WriteableDataChunk>(
@@ -333,6 +344,6 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
         grid_position: &[u64],
     ) -> Result<bool, Error> {
         let chunk_key = get_chunk_key(path_name, array_meta, grid_position);
-        self.delete(&chunk_key)
+        self.erase(&chunk_key)
     }
 }

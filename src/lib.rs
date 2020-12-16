@@ -146,6 +146,10 @@ pub trait Hierarchy {
         );
         key
     }
+
+    fn data_path_key(&self, path_name: &str) -> PathBuf {
+        PathBuf::from(DATA_ROOT_PATH).join(path_name)
+    }
 }
 
 /// Non-mutating operations on Zarr hierarchys.
