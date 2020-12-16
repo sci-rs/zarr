@@ -181,14 +181,6 @@ impl FilesystemHierarchy {
             Ok(self.base_path.join(unrooted_path))
         }
     }
-
-    fn get_data_chunk_path(&self, path_name: &str, grid_position: &[u64]) -> Result<PathBuf> {
-        let mut path = self.get_path(path_name)?;
-        for coord in grid_position {
-            path.push(coord.to_string());
-        }
-        Ok(path)
-    }
 }
 
 impl ReadableStore for FilesystemHierarchy {
@@ -208,6 +200,18 @@ impl ReadableStore for FilesystemHierarchy {
         } else {
             Ok(None)
         }
+    }
+
+    fn uri(&self, key: &str) -> Result<String> {
+        self.get_path(key).and_then(|p| {
+            p.into_os_string()
+                .into_string()
+                .map(|mut s| {
+                    s.insert_str(0, "file://");
+                    s
+                })
+                .map_err(|_| Error::new(ErrorKind::NotFound, "TODO: non-unicode path"))
+        })
     }
 }
 
@@ -412,8 +416,21 @@ mod tests {
 
         let create = FilesystemHierarchy::open_or_create(path_str)
             .expect("Failed to create Zarr filesystem");
-        let uri = create.get_chunk_uri("foo/bar", &vec![1, 2, 3]).unwrap();
-        assert_eq!(uri, format!("file://{}/foo/bar/1/2/3", path_str));
+        let array_meta = ArrayMetadata::new(
+            smallvec![10, 10, 10],
+            smallvec![5, 5, 5],
+            crate::DataType::INT32,
+            crate::compression::CompressionType::Raw(
+                crate::compression::raw::RawCompression::default(),
+            ),
+        );
+        create
+            .create_array("/foo/bar", &array_meta)
+            .expect("Failed to create array");
+        let uri = create
+            .get_chunk_uri("/foo/bar", &array_meta, &vec![1, 2, 3])
+            .unwrap();
+        assert_eq!(uri, format!("file://{}/data/root/foo/bar/c1/2/3", path_str));
     }
 
     #[test]
@@ -465,8 +482,10 @@ mod tests {
             .write_chunk("foo/bar", &array_meta, &chunk_in)
             .expect("Failed to write chunk");
 
-        let chunk_file = create.get_data_chunk_path("foo/bar", &[0, 0, 0]).unwrap();
-        let file = File::open(chunk_file).unwrap();
+        let chunk_file = create
+            .get_chunk_uri("foo/bar", &array_meta, &[0, 0, 0])
+            .unwrap();
+        let file = File::open(chunk_file.strip_prefix("file://").unwrap()).unwrap();
         let metadata = file.metadata().unwrap();
 
         let header_len = 2 * std::mem::size_of::<u16>() + 4 * std::mem::size_of::<u32>();

@@ -33,6 +33,9 @@ pub trait ReadableStore {
     fn exists(&self, key: &str) -> Result<bool, Error>;
 
     fn get(&self, key: &str) -> Result<Option<Self::GetReader>, Error>;
+
+    /// TODO: not in zarr spec
+    fn uri(&self, key: &str) -> Result<String, Error>;
 }
 
 pub trait WriteableStore {
@@ -76,6 +79,7 @@ pub trait WriteableStore {
 /// ```
 pub fn get_chunk_key(base_path: &str, array_meta: &ArrayMetadata, grid_position: &[u64]) -> String {
     use std::fmt::Write;
+    // TODO: normalize relative or absolute paths
     let mut chunk_key = format!("{}{}/c", crate::DATA_ROOT_PATH, base_path);
 
     for (i, coord) in grid_position.iter().enumerate() {
@@ -148,8 +152,14 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
         )
     }
 
-    fn get_chunk_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String, Error> {
-        todo!()
+    fn get_chunk_uri(
+        &self,
+        path_name: &str,
+        array_meta: &ArrayMetadata,
+        grid_position: &[u64],
+    ) -> Result<String, Error> {
+        let chunk_key = get_chunk_key(path_name, array_meta, &grid_position);
+        self.uri(&chunk_key)
     }
 
     fn read_chunk<T>(

@@ -86,8 +86,8 @@ fn add_extension(path: &mut std::path::PathBuf, extension: impl AsRef<std::path:
 const ENTRY_POINT_KEY: &str = "zarr.json";
 const DATA_ROOT_PATH: &str = "/data/root";
 const META_ROOT_PATH: &str = "/meta/root";
-const ARRAY_METADATA_PATH: &str = ".array";
-const GROUP_METADATA_PATH: &str = ".group";
+const ARRAY_METADATA_KEY_EXT: &str = ".array";
+const GROUP_METADATA_KEY_EXT: &str = ".group";
 
 /// Store metadata about a node.
 ///
@@ -125,7 +125,7 @@ pub trait Hierarchy {
 
     fn array_metadata_key(&self, path_name: &str) -> PathBuf {
         let mut key = PathBuf::from(META_ROOT_PATH).join(path_name);
-        add_extension(&mut key, ARRAY_METADATA_PATH);
+        add_extension(&mut key, ARRAY_METADATA_KEY_EXT);
         add_extension(
             &mut key,
             &self.get_entry_point_metadata().metadata_key_suffix,
@@ -135,7 +135,7 @@ pub trait Hierarchy {
 
     fn group_metadata_key(&self, path_name: &str) -> PathBuf {
         let mut key = PathBuf::from(META_ROOT_PATH).join(path_name);
-        add_extension(&mut key, GROUP_METADATA_PATH);
+        add_extension(&mut key, GROUP_METADATA_KEY_EXT);
         add_extension(
             &mut key,
             &self.get_entry_point_metadata().metadata_key_suffix,
@@ -169,7 +169,14 @@ pub trait HierarchyReader: Hierarchy {
     /// Whether this requires that the array and chunk exist is currently
     /// implementation dependent. Whether this URI is a URL is implementation
     /// dependent.
-    fn get_chunk_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String, Error>;
+    fn get_chunk_uri(
+        &self,
+        path_name: &str,
+        array_meta: &ArrayMetadata,
+        grid_position: &[u64],
+    ) -> Result<String, Error> {
+        todo!()
+    }
 
     /// Read a single array chunk into a linear vec.
     fn read_chunk<T>(
@@ -317,7 +324,7 @@ pub struct ArrayMetadata {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ChunkGridMetadata {
-    /// Size of each chunk, in voxels.
+    /// Shape of each chunk, in voxels.
     chunk_shape: ChunkCoord,
     /// TODO
     separator: String,
