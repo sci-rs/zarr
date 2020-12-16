@@ -1,7 +1,7 @@
 //! # Parallel Writing Benchmarks
 //!
 //! Provides parallel writing benchmarks. For parity with Java Zarr's
-//! `ZarrBenchmark`, the benchmark dataset is `i16`, with a 5x5x5 grid of chunks
+//! `ZarrBenchmark`, the benchmark array is `i16`, with a 5x5x5 grid of chunks
 //! of 64x64x64. The chunks are loaded with data from this file, which
 //! must be manually downloaded and extracted to the `benches` directory:
 //!
@@ -70,7 +70,7 @@ where
     SliceDataChunk<T, std::sync::Arc<[T]>>: zarr::WriteableDataChunk,
 {
     let chunk_size = smallvec![CHUNK_DIM; 3];
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![u64::from(CHUNK_DIM) * N_CHUNKS; 3],
         chunk_size.clone(),
         T::VARIANT,
@@ -78,13 +78,13 @@ where
     );
 
     let path_name = format!(
-        "dataset.{:?}.{}",
-        data_attrs.get_data_type(),
-        data_attrs.get_compression()
+        "array.{:?}.{}",
+        array_meta.get_data_type(),
+        array_meta.get_compression()
     );
 
-    n.create_dataset(&path_name, &data_attrs)
-        .expect("Failed to create dataset");
+    n.create_array(&path_name, &array_meta)
+        .expect("Failed to create array");
 
     let mut all_jobs: Vec<CpuFuture<usize, std::io::Error>> =
         Vec::with_capacity((N_CHUNKS * N_CHUNKS * N_CHUNKS) as usize);
@@ -98,7 +98,7 @@ where
                 let bd = bd.clone();
                 let ni = n.clone();
                 let pn = path_name.clone();
-                let da = data_attrs.clone();
+                let da = array_meta.clone();
                 all_jobs.push(pool.spawn_fn(move || {
                     let chunk_in = SliceDataChunk::new(bs, smallvec![x, y, z], bd);
                     ni.write_chunk(&pn, &da, &chunk_in)

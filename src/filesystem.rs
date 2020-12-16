@@ -29,7 +29,7 @@ use crate::{
     is_version_compatible,
     DataChunk,
     DataChunkMetadata,
-    DatasetAttributes,
+    ArrayMetadata,
     DefaultChunkReader,
     DefaultChunkWriter,
     EntryPointMetadata,
@@ -50,7 +50,7 @@ use crate::{
 
 // TODO
 const ENTRY_POINT_FILE: &str = "zarr.json";
-/// Name of the attributes file stored in the hierarchy root and dataset dirs.
+/// Name of the attributes file stored in the hierarchy root and array dirs.
 const ATTRIBUTES_FILE: &str = "attributes.json";
 
 /// A filesystem-backed Zarr hierarchy.
@@ -160,7 +160,7 @@ impl FilesystemHierarchy {
 
     /// Get the filesystem path for a given Zarr data path.
     fn get_path(&self, path_name: &str) -> Result<PathBuf> {
-        // Note: cannot use `canonicalize` on both the constructed dataset path
+        // Note: cannot use `canonicalize` on both the constructed array path
         // and `base_path` and check `starts_with`, because `canonicalize` also
         // requires the path exist.
         use std::path::{
@@ -257,7 +257,7 @@ impl ReadableStore for FilesystemHierarchy {
 //         .unwrap())
 //     }
 
-//     fn get_dataset_attributes(&self, path_name: &str) -> Result<DatasetAttributes> {
+//     fn get_array_attributes(&self, path_name: &str) -> Result<ArrayMetadata> {
 //         let attr_path = self.get_attributes_path(path_name)?;
 //         let reader = BufReader::new(File::open(attr_path)?);
 //         Ok(serde_json::from_reader(reader)?)
@@ -279,7 +279,7 @@ impl ReadableStore for FilesystemHierarchy {
 //     fn read_chunk<T>(
 //         &self,
 //         path_name: &str,
-//         data_attrs: &DatasetAttributes,
+//         array_meta: &ArrayMetadata,
 //         grid_position: GridCoord,
 //     ) -> Result<Option<VecDataChunk<T>>>
 //     where
@@ -294,7 +294,7 @@ impl ReadableStore for FilesystemHierarchy {
 //             Ok(Some(
 //                 <crate::DefaultChunk as DefaultChunkReader<T, _>>::read_chunk(
 //                     reader,
-//                     data_attrs,
+//                     array_meta,
 //                     grid_position,
 //                 )?,
 //             ))
@@ -309,7 +309,7 @@ impl ReadableStore for FilesystemHierarchy {
 //     >(
 //         &self,
 //         path_name: &str,
-//         data_attrs: &DatasetAttributes,
+//         array_meta: &ArrayMetadata,
 //         grid_position: GridCoord,
 //         chunk: &mut B,
 //     ) -> Result<Option<()>> {
@@ -320,7 +320,7 @@ impl ReadableStore for FilesystemHierarchy {
 //             let reader = BufReader::new(file);
 //             <crate::DefaultChunk as DefaultChunkReader<T, _>>::read_chunk_into(
 //                 reader,
-//                 data_attrs,
+//                 array_meta,
 //                 grid_position,
 //                 chunk,
 //             )?;
@@ -333,7 +333,7 @@ impl ReadableStore for FilesystemHierarchy {
 //     fn chunk_metadata(
 //         &self,
 //         path_name: &str,
-//         _data_attrs: &DatasetAttributes,
+//         _array_meta: &ArrayMetadata,
 //         grid_position: &[u64],
 //     ) -> Result<Option<DataChunkMetadata>> {
 //         let chunk_file = self.get_data_chunk_path(path_name, grid_position)?;
@@ -495,7 +495,7 @@ impl WriteableStore for FilesystemHierarchy {
 //     fn write_chunk<T: ReflectedType, B: DataChunk<T> + WriteableDataChunk>(
 //         &self,
 //         path_name: &str,
-//         data_attrs: &DatasetAttributes,
+//         array_meta: &ArrayMetadata,
 //         chunk: &B,
 //     ) -> Result<()> {
 //         let path = self.get_data_chunk_path(path_name, chunk.get_grid_position())?;
@@ -511,7 +511,7 @@ impl WriteableStore for FilesystemHierarchy {
 //         file.set_len(0)?;
 
 //         let buffer = BufWriter::new(file);
-//         <crate::DefaultChunk as DefaultChunkWriter<T, _, _>>::write_chunk(buffer, data_attrs, chunk)
+//         <crate::DefaultChunk as DefaultChunkWriter<T, _, _>>::write_chunk(buffer, array_meta, chunk)
 //     }
 
 //     // TODO
@@ -592,22 +592,22 @@ mod tests {
     }
 
     #[test]
-    fn list_symlinked_datasets() {
+    fn list_symlinked_arrays() {
         let wrapper = FilesystemHierarchy::temp_new_rw();
         let dir = TempDir::new("rust_zarr_tests_dupe").unwrap();
         let mut linked_path = wrapper.context.path().to_path_buf();
-        linked_path.push("linked_dataset");
+        linked_path.push("linked_array");
 
         #[cfg(target_family = "unix")]
         std::os::unix::fs::symlink(dir.path(), &linked_path).unwrap();
         #[cfg(target_family = "windows")]
         std::os::windows::fs::symlink_dir(dir.path(), &linked_path).unwrap();
 
-        assert_eq!(wrapper.zarr.list("").unwrap(), vec!["linked_dataset"]);
+        assert_eq!(wrapper.zarr.list("").unwrap(), vec!["linked_array"]);
         // TODO
-        // assert!(wrapper.zarr.exists("linked_dataset").unwrap());
+        // assert!(wrapper.zarr.exists("linked_array").unwrap());
 
-        let data_attrs = DatasetAttributes::new(
+        let array_meta = ArrayMetadata::new(
             smallvec![10, 10, 10],
             smallvec![5, 5, 5],
             crate::DataType::INT32,
@@ -617,9 +617,9 @@ mod tests {
         );
         wrapper
             .zarr
-            .create_dataset("linked_dataset", &data_attrs)
-            .expect("Failed to create dataset");
-        assert!(wrapper.zarr.dataset_exists("linked_dataset").unwrap());
+            .create_array("linked_array", &array_meta)
+            .expect("Failed to create array");
+        assert!(wrapper.zarr.array_exists("linked_array").unwrap());
     }
 
     #[test]
@@ -637,7 +637,7 @@ mod tests {
     pub(crate) fn short_chunk_truncation() {
         let wrapper = FilesystemHierarchy::temp_new_rw();
         let create = wrapper.as_ref();
-        let data_attrs = DatasetAttributes::new(
+        let array_meta = ArrayMetadata::new(
             smallvec![10, 10, 10],
             smallvec![5, 5, 5],
             crate::DataType::INT32,
@@ -647,25 +647,25 @@ mod tests {
         );
         let chunk_data: Vec<i32> = (0..125_i32).collect();
         let chunk_in = crate::SliceDataChunk::new(
-            data_attrs.chunk_grid.chunk_size.clone(),
+            array_meta.chunk_grid.chunk_size.clone(),
             smallvec![0, 0, 0],
             &chunk_data,
         );
 
         create
-            .create_dataset("foo/bar", &data_attrs)
-            .expect("Failed to create dataset");
+            .create_array("foo/bar", &array_meta)
+            .expect("Failed to create array");
         create
-            .write_chunk("foo/bar", &data_attrs, &chunk_in)
+            .write_chunk("foo/bar", &array_meta, &chunk_in)
             .expect("Failed to write chunk");
 
         let read = create.open_reader();
         let chunk_out = read
-            .read_chunk::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 0])
+            .read_chunk::<i32>("foo/bar", &array_meta, smallvec![0, 0, 0])
             .expect("Failed to read chunk")
             .expect("Chunk is empty");
         let missing_chunk_out = read
-            .read_chunk::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 1])
+            .read_chunk::<i32>("foo/bar", &array_meta, smallvec![0, 0, 1])
             .expect("Failed to read chunk");
 
         assert_eq!(chunk_out.get_data(), &chunk_data[..]);
@@ -674,12 +674,12 @@ mod tests {
         // Shorten data (this still will not catch trailing data less than the length).
         let chunk_data: Vec<i32> = (0..10_i32).collect();
         let chunk_in = crate::SliceDataChunk::new(
-            data_attrs.chunk_grid.chunk_size.clone(),
+            array_meta.chunk_grid.chunk_size.clone(),
             smallvec![0, 0, 0],
             &chunk_data,
         );
         create
-            .write_chunk("foo/bar", &data_attrs, &chunk_in)
+            .write_chunk("foo/bar", &array_meta, &chunk_in)
             .expect("Failed to write chunk");
 
         let chunk_file = create.get_data_chunk_path("foo/bar", &[0, 0, 0]).unwrap();

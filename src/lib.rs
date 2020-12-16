@@ -180,40 +180,40 @@ pub trait HierarchyReader: Hierarchy {
     /// Get the Zarr specification version of the hierarchy.
     fn get_version(&self) -> Result<VersionReq, Error>;
 
-    /// Get attributes for a dataset.
-    fn get_dataset_attributes(&self, path_name: &str) -> Result<DatasetAttributes, Error>;
+    /// Get attributes for a array.
+    fn get_array_attributes(&self, path_name: &str) -> Result<ArrayMetadata, Error>;
 
-    /// Test whether a group or dataset exists.
+    /// Test whether a group or array exists.
     fn exists(&self, path_name: &str) -> Result<bool, Error>;
 
-    /// Test whether a dataset exists.
-    fn dataset_exists(&self, path_name: &str) -> Result<bool, Error> {
-        Ok(self.exists(path_name)? && self.get_dataset_attributes(path_name).is_ok())
+    /// Test whether a array exists.
+    fn array_exists(&self, path_name: &str) -> Result<bool, Error> {
+        Ok(self.exists(path_name)? && self.get_array_attributes(path_name).is_ok())
     }
 
     /// Get a URI string for a data chunk.
     ///
-    /// Whether this requires that the dataset and chunk exist is currently
+    /// Whether this requires that the array and chunk exist is currently
     /// implementation dependent. Whether this URI is a URL is implementation
     /// dependent.
     fn get_chunk_uri(&self, path_name: &str, grid_position: &[u64]) -> Result<String, Error>;
 
-    /// Read a single dataset chunk into a linear vec.
+    /// Read a single array chunk into a linear vec.
     fn read_chunk<T>(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         grid_position: GridCoord,
     ) -> Result<Option<VecDataChunk<T>>, Error>
     where
         VecDataChunk<T>: DataChunk<T> + ReadableDataChunk,
         T: ReflectedType;
 
-    /// Read a single dataset chunk into an existing buffer.
+    /// Read a single array chunk into an existing buffer.
     fn read_chunk_into<T: ReflectedType, B: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk>(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         grid_position: GridCoord,
         chunk: &mut B,
     ) -> Result<Option<()>, Error>;
@@ -222,7 +222,7 @@ pub trait HierarchyReader: Hierarchy {
     fn chunk_metadata(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         grid_position: &[u64],
     ) -> Result<Option<DataChunkMetadata>, Error>;
 
@@ -251,9 +251,9 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
         })
     }
 
-    fn get_dataset_attributes(&self, path_name: &str) -> Result<DatasetAttributes, Error> {
-        let dataset_path = self.array_metadata_key(path_name);
-        let value_reader = ReadableStore::get(self, &dataset_path.to_str().expect("TODO"))?
+    fn get_array_attributes(&self, path_name: &str) -> Result<ArrayMetadata, Error> {
+        let array_path = self.array_metadata_key(path_name);
+        let value_reader = ReadableStore::get(self, &array_path.to_str().expect("TODO"))?
             .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;
         Ok(serde_json::from_reader(value_reader)?)
     }
@@ -281,7 +281,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
     fn read_chunk<T>(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         grid_position: GridCoord,
     ) -> Result<Option<VecDataChunk<T>>, Error>
     where
@@ -289,10 +289,10 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
         T: ReflectedType,
     {
         // TODO convert asserts to errors
-        assert!(data_attrs.in_bounds(&grid_position));
+        assert!(array_meta.in_bounds(&grid_position));
 
         // Construct chunk path string
-        let chunk_key = get_chunk_key(path_name, data_attrs, &grid_position);
+        let chunk_key = get_chunk_key(path_name, array_meta, &grid_position);
 
         // Get key from store
         let value_reader = ReadableStore::get(self, &chunk_key)?;
@@ -302,7 +302,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
             .map(|reader| {
                 <crate::DefaultChunk as DefaultChunkReader<T, _>>::read_chunk(
                     reader,
-                    data_attrs,
+                    array_meta,
                     grid_position,
                 )
             })
@@ -315,15 +315,15 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
     >(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         grid_position: GridCoord,
         chunk: &mut B,
     ) -> Result<Option<()>, Error> {
         // TODO convert asserts to errors
-        assert!(data_attrs.in_bounds(&grid_position));
+        assert!(array_meta.in_bounds(&grid_position));
 
         // Construct chunk path string
-        let chunk_key = get_chunk_key(path_name, data_attrs, &grid_position);
+        let chunk_key = get_chunk_key(path_name, array_meta, &grid_position);
 
         // Get key from store
         let value_reader = ReadableStore::get(self, &chunk_key)?;
@@ -333,7 +333,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
             .map(|reader| {
                 <crate::DefaultChunk as DefaultChunkReader<T, _>>::read_chunk_into(
                     reader,
-                    data_attrs,
+                    array_meta,
                     grid_position,
                     chunk,
                 )
@@ -344,7 +344,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
     fn chunk_metadata(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         grid_position: &[u64],
     ) -> Result<Option<DataChunkMetadata>, Error> {
         todo!()
@@ -371,7 +371,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
     }
 }
 
-fn get_chunk_key(base_path: &str, data_attrs: &DatasetAttributes, grid_position: &[u64]) -> String {
+fn get_chunk_key(base_path: &str, array_meta: &ArrayMetadata, grid_position: &[u64]) -> String {
     use std::fmt::Write;
     // TODO remove allocs and cleanup
     let mut chunk_key = match grid_position.len() {
@@ -385,7 +385,7 @@ fn get_chunk_key(base_path: &str, data_attrs: &DatasetAttributes, grid_position:
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
-            .join(&data_attrs.chunk_grid.chunk_separator)
+            .join(&array_meta.chunk_grid.chunk_separator)
     )
     .unwrap();
 
@@ -394,7 +394,7 @@ fn get_chunk_key(base_path: &str, data_attrs: &DatasetAttributes, grid_position:
 
 /// Non-mutating operations on Zarr hierarchys that support group discoverability.
 pub trait HierarchyLister: HierarchyReader {
-    /// List all groups (including datasets) in a group.
+    /// List all groups (including arrays) in a group.
     fn list(&self, path_name: &str) -> Result<Vec<String>, Error>;
 }
 
@@ -422,32 +422,32 @@ pub trait HierarchyWriter: HierarchyReader {
         attributes: serde_json::Map<String, serde_json::Value>,
     ) -> Result<(), Error>;
 
-    /// Set mandatory dataset attributes.
-    fn set_dataset_attributes(
+    /// Set mandatory array attributes.
+    fn set_array_attributes(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
     ) -> Result<(), Error> {
-        if let serde_json::Value::Object(map) = serde_json::to_value(data_attrs)? {
+        if let serde_json::Value::Object(map) = serde_json::to_value(array_meta)? {
             self.set_attributes(path_name, map)
         } else {
-            panic!("Impossible: DatasetAttributes serializes to object")
+            panic!("Impossible: ArrayMetadata serializes to object")
         }
     }
 
     /// Create a group (directory).
     fn create_group(&self, path_name: &str) -> Result<(), Error>;
 
-    /// Create a dataset. This will create the dataset group and attributes,
+    /// Create a array. This will create the array group and attributes,
     /// but not populate any chunk data.
-    fn create_dataset(&self, path_name: &str, data_attrs: &DatasetAttributes) -> Result<(), Error>;
+    fn create_array(&self, path_name: &str, array_meta: &ArrayMetadata) -> Result<(), Error>;
 
     /// Remove the Zarr hierarchy.
     fn remove_all(&self) -> Result<(), Error> {
         self.remove("")
     }
 
-    /// Remove a group or dataset (directory and all contained files).
+    /// Remove a group or array (directory and all contained files).
     ///
     /// This will wait on locks acquired by other writers or readers.
     fn remove(&self, path_name: &str) -> Result<(), Error>;
@@ -455,18 +455,18 @@ pub trait HierarchyWriter: HierarchyReader {
     fn write_chunk<T: ReflectedType, B: DataChunk<T> + WriteableDataChunk>(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         chunk: &B,
     ) -> Result<(), Error>;
 
-    /// Delete a chunk from a dataset.
+    /// Delete a chunk from a array.
     ///
     /// Returns `true` if the chunk does not exist on the backend at the
     /// completion of the call.
     fn delete_chunk(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         grid_position: &[u64],
     ) -> Result<bool, Error>;
 }
@@ -545,7 +545,7 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
         }
     }
 
-    fn create_dataset(&self, path_name: &str, data_attrs: &DatasetAttributes) -> Result<(), Error> {
+    fn create_array(&self, path_name: &str, array_meta: &ArrayMetadata) -> Result<(), Error> {
         // Because of implicit hierarchy rules, it is not necessary to create
         // the parent group.
         // let path_buf = PathBuf::from(path_name);
@@ -562,7 +562,7 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
             ))
         } else {
             self.set(metadata_key.to_str().expect("TODO"), |writer| {
-                Ok(serde_json::to_writer(writer, data_attrs)?)
+                Ok(serde_json::to_writer(writer, array_meta)?)
             })
         }
     }
@@ -574,24 +574,24 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
     fn write_chunk<T: ReflectedType, B: DataChunk<T> + WriteableDataChunk>(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         chunk: &B,
     ) -> Result<(), Error> {
         // TODO convert assert
-        // assert!(data_attrs.in_bounds(chunk.get_grid_position()));
-        let chunk_key = get_chunk_key(path_name, data_attrs, chunk.get_grid_position());
+        // assert!(array_meta.in_bounds(chunk.get_grid_position()));
+        let chunk_key = get_chunk_key(path_name, array_meta, chunk.get_grid_position());
         self.set(&chunk_key, |writer| {
-            <DefaultChunk as DefaultChunkWriter<T, _, _>>::write_chunk(writer, data_attrs, chunk)
+            <DefaultChunk as DefaultChunkWriter<T, _, _>>::write_chunk(writer, array_meta, chunk)
         })
     }
 
     fn delete_chunk(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         grid_position: &[u64],
     ) -> Result<bool, Error> {
-        let chunk_key = get_chunk_key(path_name, data_attrs, grid_position);
+        let chunk_key = get_chunk_key(path_name, array_meta, grid_position);
         self.delete(&chunk_key)
     }
 }
@@ -617,11 +617,11 @@ impl Default for GroupMetadata {
     }
 }
 
-/// Attributes of a tensor dataset.
+/// Attributes of a tensor array.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct DatasetAttributes {
-    /// Dimensions of the entire dataset, in voxels.
+pub struct ArrayMetadata {
+    /// Dimensions of the entire array, in voxels.
     dimensions: GridCoord,
     /// Element data type.
     data_type: DataType,
@@ -640,19 +640,19 @@ pub struct ChunkGridMetadata {
     chunk_separator: String,
 }
 
-impl DatasetAttributes {
+impl ArrayMetadata {
     pub fn new(
         dimensions: GridCoord,
         chunk_size: ChunkCoord,
         data_type: DataType,
         compression: compression::CompressionType,
-    ) -> DatasetAttributes {
+    ) -> ArrayMetadata {
         assert_eq!(
             dimensions.len(),
             chunk_size.len(),
-            "Number of dataset dimensions must match number of chunk size dimensions."
+            "Number of array dimensions must match number of chunk size dimensions."
         );
-        DatasetAttributes {
+        ArrayMetadata {
             dimensions,
             data_type,
             compression,
@@ -711,7 +711,7 @@ impl DatasetAttributes {
     /// ```
     /// use zarr::prelude::*;
     /// use zarr::smallvec::smallvec;
-    /// let attrs = DatasetAttributes::new(
+    /// let attrs = ArrayMetadata::new(
     ///     smallvec![50, 40, 30],
     ///     smallvec![11, 10, 10],
     ///     DataType::UINT8,
@@ -723,11 +723,11 @@ impl DatasetAttributes {
         self.get_grid_extent().iter().product()
     }
 
-    /// Check whether a chunk grid position is in the bounds of this dataset.
+    /// Check whether a chunk grid position is in the bounds of this array.
     /// ```
     /// use zarr::prelude::*;
     /// use zarr::smallvec::smallvec;
-    /// let attrs = DatasetAttributes::new(
+    /// let attrs = ArrayMetadata::new(
     ///     smallvec![50, 40, 30],
     ///     smallvec![11, 10, 10],
     ///     DataType::UINT8,
@@ -949,13 +949,13 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read>:
 {
     fn read_chunk(
         mut buffer: R,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         grid_position: GridCoord,
     ) -> std::io::Result<VecDataChunk<T>>
     where
         VecDataChunk<T>: DataChunk<T> + ReadableDataChunk,
     {
-        if data_attrs.data_type != T::VARIANT {
+        if array_meta.data_type != T::VARIANT {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 "Attempt to create data chunk for wrong type.",
@@ -964,7 +964,7 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read>:
         let header = Self::read_chunk_header(&mut buffer, grid_position)?;
 
         let mut chunk = T::create_data_chunk(header);
-        let mut decompressed = data_attrs.compression.decoder(buffer);
+        let mut decompressed = array_meta.compression.decoder(buffer);
         chunk.read_data(&mut decompressed)?;
 
         Ok(chunk)
@@ -972,11 +972,11 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read>:
 
     fn read_chunk_into<B: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk>(
         mut buffer: R,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         grid_position: GridCoord,
         chunk: &mut B,
     ) -> std::io::Result<()> {
-        if data_attrs.data_type != T::VARIANT {
+        if array_meta.data_type != T::VARIANT {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 "Attempt to create data chunk for wrong type.",
@@ -985,7 +985,7 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read>:
         let header = Self::read_chunk_header(&mut buffer, grid_position)?;
 
         chunk.reinitialize(header);
-        let mut decompressed = data_attrs.compression.decoder(buffer);
+        let mut decompressed = array_meta.compression.decoder(buffer);
         chunk.read_data(&mut decompressed)?;
 
         Ok(())
@@ -1001,10 +1001,10 @@ pub trait DefaultChunkWriter<
 {
     fn write_chunk(
         mut buffer: W,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         chunk: &B,
     ) -> std::io::Result<()> {
-        if data_attrs.data_type != T::VARIANT {
+        if array_meta.data_type != T::VARIANT {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 "Attempt to write data chunk for wrong type.",
@@ -1017,7 +1017,7 @@ pub trait DefaultChunkWriter<
             CHUNK_VAR_LEN
         };
         buffer.write_u16::<ZarrEndian>(mode)?;
-        buffer.write_u16::<ZarrEndian>(data_attrs.get_ndim() as u16)?;
+        buffer.write_u16::<ZarrEndian>(array_meta.get_ndim() as u16)?;
         for i in chunk.get_size() {
             buffer.write_u32::<ZarrEndian>(*i)?;
         }
@@ -1026,7 +1026,7 @@ pub trait DefaultChunkWriter<
             buffer.write_u32::<ZarrEndian>(chunk.get_num_elements())?;
         }
 
-        let mut compressor = data_attrs.compression.encoder(buffer);
+        let mut compressor = array_meta.compression.encoder(buffer);
         chunk.write_data(&mut compressor)?;
 
         Ok(())

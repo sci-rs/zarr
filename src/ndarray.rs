@@ -18,7 +18,7 @@ use crate::{
     ChunkCoord,
     CoordVec,
     DataChunk,
-    DatasetAttributes,
+    ArrayMetadata,
     GridCoord,
     HierarchyReader,
     HierarchyWriter,
@@ -153,7 +153,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
     fn read_ndarray<T>(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         bbox: &BoundingBox,
     ) -> Result<ndarray::Array<T, ndarray::Dim<ndarray::IxDynImpl>>, Error>
     where
@@ -162,7 +162,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
     {
         let mut arr = Array::zeros(bbox.size_ndarray_shape().f());
 
-        self.read_ndarray_into(path_name, data_attrs, bbox, arr.view_mut())?;
+        self.read_ndarray_into(path_name, array_meta, bbox, arr.view_mut())?;
 
         Ok(arr)
     }
@@ -175,7 +175,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
     fn read_ndarray_into<'a, T>(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         bbox: &BoundingBox,
         arr: ndarray::ArrayViewMut<'a, T, ndarray::Dim<ndarray::IxDynImpl>>,
     ) -> Result<(), Error>
@@ -183,7 +183,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
         VecDataChunk<T>: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
         T: ReflectedType + num_traits::identities::Zero,
     {
-        self.read_ndarray_into_with_buffer(path_name, data_attrs, bbox, arr, &mut None)
+        self.read_ndarray_into_with_buffer(path_name, array_meta, bbox, arr, &mut None)
     }
 
     /// Read an arbitrary bounding box from an Zarr volume into an existing
@@ -195,7 +195,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
     fn read_ndarray_into_with_buffer<'a, T>(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         bbox: &BoundingBox,
         mut arr: ndarray::ArrayViewMut<'a, T, ndarray::Dim<ndarray::IxDynImpl>>,
         chunk_buff_opt: &mut Option<VecDataChunk<T>>,
@@ -204,7 +204,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
         VecDataChunk<T>: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
         T: ReflectedType + num_traits::identities::Zero,
     {
-        if bbox.offset.len() != data_attrs.get_ndim() || data_attrs.get_ndim() != arr.ndim() {
+        if bbox.offset.len() != array_meta.get_ndim() || array_meta.get_ndim() != arr.ndim() {
             return Err(Error::new(
                 ErrorKind::InvalidData,
                 "Wrong number of dimensions",
@@ -218,15 +218,15 @@ pub trait ZarrNdarrayReader: HierarchyReader {
             ));
         }
 
-        for coord in data_attrs.bounded_coord_iter(bbox) {
+        for coord in array_meta.bounded_coord_iter(bbox) {
             let grid_pos = GridCoord::from(&coord[..]);
             let is_chunk = match chunk_buff_opt {
                 None => {
-                    *chunk_buff_opt = self.read_chunk(path_name, data_attrs, grid_pos)?;
+                    *chunk_buff_opt = self.read_chunk(path_name, array_meta, grid_pos)?;
                     chunk_buff_opt.is_some()
                 }
                 Some(ref mut chunk_buff) => self
-                    .read_chunk_into(path_name, data_attrs, grid_pos, chunk_buff)?
+                    .read_chunk_into(path_name, array_meta, grid_pos, chunk_buff)?
                     .is_some(),
             };
 
@@ -236,7 +236,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
             }
 
             if let Some(ref chunk) = chunk_buff_opt {
-                let chunk_bb = chunk.get_bounds(data_attrs);
+                let chunk_bb = chunk.get_bounds(array_meta);
                 let mut read_bb = bbox.clone();
                 read_bb.intersect(&chunk_bb);
 
@@ -256,7 +256,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
 
                 let chunk_slice = chunk_read_bb.to_ndarray_slice();
 
-                // Zarr datasets are stored f-order/column-major.
+                // Zarr arrays are stored f-order/column-major.
                 let chunk_data =
                     ArrayView::from_shape(chunk_bb.size_ndarray_shape().f(), chunk.get_data())
                         .expect("TODO: chunk ndarray failed");
@@ -279,7 +279,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
     fn write_ndarray<'a, T, A>(
         &self,
         path_name: &str,
-        data_attrs: &DatasetAttributes,
+        array_meta: &ArrayMetadata,
         offset: GridCoord,
         array: A,
         fill_val: T,
@@ -291,7 +291,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
         A: ndarray::AsArray<'a, T, ndarray::Dim<ndarray::IxDynImpl>>,
     {
         let array = array.into();
-        if array.ndim() != data_attrs.get_ndim() {
+        if array.ndim() != array_meta.get_ndim() {
             return Err(Error::new(
                 ErrorKind::InvalidData,
                 "Wrong number of dimensions",
@@ -304,9 +304,9 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
 
         let mut chunk_vec: Vec<T> = Vec::new();
 
-        for coord in data_attrs.bounded_coord_iter(&bbox) {
+        for coord in array_meta.bounded_coord_iter(&bbox) {
             let grid_coord = GridCoord::from(&coord[..]);
-            let nom_chunk_bb = data_attrs.get_chunk_bounds(&grid_coord);
+            let nom_chunk_bb = array_meta.get_chunk_bounds(&grid_coord);
             let mut write_bb = nom_chunk_bb.clone();
             write_bb.intersect(&bbox);
             let arr_bb = write_bb.clone() - &bbox.offset;
@@ -321,14 +321,14 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                 chunk_vec.extend(arr_view.t().iter().cloned());
                 let chunk = VecDataChunk::new(write_bb.size_chunk(), coord.into(), chunk_vec);
 
-                self.write_chunk(path_name, data_attrs, &chunk)?;
+                self.write_chunk(path_name, array_meta, &chunk)?;
                 chunk_vec = chunk.into_data();
             } else {
-                let chunk_opt = self.read_chunk(path_name, data_attrs, grid_coord.clone())?;
+                let chunk_opt = self.read_chunk(path_name, array_meta, grid_coord.clone())?;
 
                 let (chunk_bb, mut chunk_array) = match chunk_opt {
                     Some(chunk) => {
-                        let chunk_bb = chunk.get_bounds(data_attrs);
+                        let chunk_bb = chunk.get_bounds(array_meta);
                         let chunk_array = Array::from_shape_vec(
                             chunk_bb.size_ndarray_shape().f(),
                             chunk.into_data(),
@@ -365,7 +365,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                 chunk_vec.extend(chunk_array.t().iter().cloned());
                 let chunk = VecDataChunk::new(chunk_bb.size_chunk(), coord.into(), chunk_vec);
 
-                self.write_chunk(path_name, data_attrs, &chunk)?;
+                self.write_chunk(path_name, array_meta, &chunk)?;
                 chunk_vec = chunk.into_data();
             }
         }
@@ -376,7 +376,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
 
 impl<T: HierarchyWriter> ZarrNdarrayWriter for T {}
 
-impl DatasetAttributes {
+impl ArrayMetadata {
     pub fn coord_iter(&self) -> impl Iterator<Item = Vec<u64>> + ExactSizeIterator {
         let coord_ceil = self
             .get_dimensions()
@@ -434,9 +434,9 @@ impl DatasetAttributes {
 
 impl<T: ReflectedType, C> SliceDataChunk<T, C> {
     /// Get the bounding box of the occupied extent of this chunk, which may
-    /// be smaller than the nominal bounding box expected from the dataset.
-    pub fn get_bounds(&self, data_attrs: &DatasetAttributes) -> BoundingBox {
-        let mut bbox = data_attrs.get_chunk_bounds(&self.grid_position);
+    /// be smaller than the nominal bounding box expected from the array.
+    pub fn get_bounds(&self, array_meta: &ArrayMetadata) -> BoundingBox {
+        let mut bbox = array_meta.get_chunk_bounds(&self.grid_position);
         bbox.size = self.size.iter().cloned().map(u64::from).collect();
         bbox
     }
@@ -499,17 +499,17 @@ pub(crate) mod tests {
     use crate::DataType;
 
     #[test]
-    fn test_dataset_attributes_coord_iter() {
+    fn test_array_attributes_coord_iter() {
         use std::collections::HashSet;
 
-        let data_attrs = DatasetAttributes::new(
+        let array_meta = ArrayMetadata::new(
             smallvec![1, 4, 5],
             smallvec![1, 2, 3],
             DataType::INT16,
             crate::compression::CompressionType::default(),
         );
 
-        let coords: HashSet<Vec<u64>> = data_attrs.coord_iter().collect();
+        let coords: HashSet<Vec<u64>> = array_meta.coord_iter().collect();
         let expected: HashSet<Vec<u64>> =
             vec![vec![0, 0, 0], vec![0, 0, 1], vec![0, 1, 0], vec![0, 1, 1]]
                 .into_iter()

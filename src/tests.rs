@@ -29,8 +29,8 @@ impl<C, N: HierarchyReader + HierarchyWriter> AsRef<N> for ContextWrapper<C, N> 
     }
 }
 
-fn doc_spec_dataset_attributes(compression: compression::CompressionType) -> DatasetAttributes {
-    DatasetAttributes::new(
+fn doc_spec_array_attributes(compression: compression::CompressionType) -> ArrayMetadata {
+    ArrayMetadata::new(
         smallvec![5, 6, 7],
         smallvec![1, 2, 3],
         DataType::INT16,
@@ -40,16 +40,16 @@ fn doc_spec_dataset_attributes(compression: compression::CompressionType) -> Dat
 
 pub(crate) fn test_read_doc_spec_chunk(chunk: &[u8], compression: compression::CompressionType) {
     let buff = Cursor::new(chunk);
-    let data_attrs = doc_spec_dataset_attributes(compression);
+    let array_meta = doc_spec_array_attributes(compression);
 
     let chunk = <DefaultChunk as DefaultChunkReader<i16, std::io::Cursor<&[u8]>>>::read_chunk(
         buff,
-        &data_attrs,
+        &array_meta,
         smallvec![0, 0, 0],
     )
     .expect("read_chunk failed");
 
-    assert_eq!(chunk.get_size(), data_attrs.get_chunk_size());
+    assert_eq!(chunk.get_size(), array_meta.get_chunk_size());
     assert_eq!(chunk.get_grid_position(), &[0, 0, 0]);
     assert_eq!(chunk.get_data(), &DOC_SPEC_CHUNK_DATA);
 }
@@ -58,22 +58,22 @@ pub(crate) fn test_write_doc_spec_chunk(
     expected_chunk: &[u8],
     compression: compression::CompressionType,
 ) {
-    let data_attrs = doc_spec_dataset_attributes(compression);
+    let array_meta = doc_spec_array_attributes(compression);
     let chunk_in = SliceDataChunk::new(
-        data_attrs.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_size.clone(),
         smallvec![0, 0, 0],
         DOC_SPEC_CHUNK_DATA,
     );
     let mut buff: Vec<u8> = Vec::new();
 
-    <DefaultChunk as DefaultChunkWriter<i16, _, _>>::write_chunk(&mut buff, &data_attrs, &chunk_in)
+    <DefaultChunk as DefaultChunkWriter<i16, _, _>>::write_chunk(&mut buff, &array_meta, &chunk_in)
         .expect("read_chunk failed");
 
     assert_eq!(buff, expected_chunk);
 }
 
 pub(crate) fn test_chunk_compression_rw(compression: compression::CompressionType) {
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
         DataType::INT32,
@@ -81,7 +81,7 @@ pub(crate) fn test_chunk_compression_rw(compression: compression::CompressionTyp
     );
     let chunk_data: Vec<i32> = (0..125_i32).collect();
     let chunk_in = SliceDataChunk::new(
-        data_attrs.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_size.clone(),
         smallvec![0, 0, 0],
         &chunk_data,
     );
@@ -90,14 +90,14 @@ pub(crate) fn test_chunk_compression_rw(compression: compression::CompressionTyp
 
     <DefaultChunk as DefaultChunkWriter<i32, _, _>>::write_chunk(
         &mut inner,
-        &data_attrs,
+        &array_meta,
         &chunk_in,
     )
     .expect("write_chunk failed");
 
     let chunk_out = <DefaultChunk as DefaultChunkReader<i32, _>>::read_chunk(
         &inner[..],
-        &data_attrs,
+        &array_meta,
         smallvec![0, 0, 0],
     )
     .expect("read_chunk failed");
@@ -108,7 +108,7 @@ pub(crate) fn test_chunk_compression_rw(compression: compression::CompressionTyp
 }
 
 pub(crate) fn test_varlength_chunk_rw(compression: compression::CompressionType) {
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
         DataType::INT32,
@@ -116,7 +116,7 @@ pub(crate) fn test_varlength_chunk_rw(compression: compression::CompressionType)
     );
     let chunk_data: Vec<i32> = (0..100_i32).collect();
     let chunk_in = SliceDataChunk::new(
-        data_attrs.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_size.clone(),
         smallvec![0, 0, 0],
         &chunk_data,
     );
@@ -125,14 +125,14 @@ pub(crate) fn test_varlength_chunk_rw(compression: compression::CompressionType)
 
     <DefaultChunk as DefaultChunkWriter<i32, _, _>>::write_chunk(
         &mut inner,
-        &data_attrs,
+        &array_meta,
         &chunk_in,
     )
     .expect("write_chunk failed");
 
     let chunk_out = <DefaultChunk as DefaultChunkReader<i32, _>>::read_chunk(
         &inner[..],
-        &data_attrs,
+        &array_meta,
         smallvec![0, 0, 0],
     )
     .expect("read_chunk failed");
@@ -159,48 +159,48 @@ pub(crate) fn create_backend<N: ZarrTestable>() {
     assert_eq!(read.list_attributes("").unwrap()["foo"], "bar");
 }
 
-pub(crate) fn create_dataset<N: ZarrTestable>() {
+pub(crate) fn create_array<N: ZarrTestable>() {
     let wrapper = N::temp_new_rw();
     let create = wrapper.as_ref();
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
         DataType::INT32,
         crate::compression::CompressionType::Raw(crate::compression::raw::RawCompression::default()),
     );
     create
-        .create_dataset("foo/bar", &data_attrs)
-        .expect("Failed to create dataset");
+        .create_array("foo/bar", &array_meta)
+        .expect("Failed to create array");
 
     let read = create.open_reader();
 
-    assert_eq!(read.get_dataset_attributes("foo/bar").unwrap(), data_attrs);
+    assert_eq!(read.get_array_attributes("foo/bar").unwrap(), array_meta);
 }
 
 pub(crate) fn absolute_relative_paths<N: ZarrTestable>() -> Result<()> {
     let wrapper = N::temp_new_rw();
     let create = wrapper.as_ref();
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
         DataType::INT32,
         crate::compression::CompressionType::Raw(crate::compression::raw::RawCompression::default()),
     );
     create
-        .create_dataset("foo/bar", &data_attrs)
-        .expect("Failed to create dataset");
+        .create_array("foo/bar", &array_meta)
+        .expect("Failed to create array");
 
     let read = create.open_reader();
 
-    assert_eq!(read.get_dataset_attributes("foo/bar")?, data_attrs);
+    assert_eq!(read.get_array_attributes("foo/bar")?, array_meta);
     assert!(read.exists("/foo/bar")?);
-    assert_eq!(read.get_dataset_attributes("/foo/bar")?, data_attrs);
-    assert!(read.dataset_exists("/foo/bar")?);
+    assert_eq!(read.get_array_attributes("/foo/bar")?, array_meta);
+    assert!(read.array_exists("/foo/bar")?);
     // Repeated slashes are combined in Rust, not roots.
     assert!(!read.exists("/foo//foo/bar")?);
     assert!(read.exists("/foo//bar")?);
-    assert_eq!(read.get_dataset_attributes("/foo//bar")?, data_attrs);
-    assert!(read.dataset_exists("/foo//bar")?);
+    assert_eq!(read.get_array_attributes("/foo//bar")?, array_meta);
+    assert!(read.array_exists("/foo//bar")?);
 
     Ok(())
 }
@@ -284,7 +284,7 @@ pub(crate) fn attributes_rw<N: ZarrTestable>() {
 pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
     let wrapper = N::temp_new_rw();
     let create = wrapper.as_ref();
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
         DataType::INT32,
@@ -292,25 +292,25 @@ pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
     );
     let chunk_data: Vec<i32> = (0..125_i32).collect();
     let chunk_in = crate::SliceDataChunk::new(
-        data_attrs.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_size.clone(),
         smallvec![0, 0, 0],
         &chunk_data,
     );
 
     create
-        .create_dataset("foo/bar", &data_attrs)
-        .expect("Failed to create dataset");
+        .create_array("foo/bar", &array_meta)
+        .expect("Failed to create array");
     create
-        .write_chunk("foo/bar", &data_attrs, &chunk_in)
+        .write_chunk("foo/bar", &array_meta, &chunk_in)
         .expect("Failed to write chunk");
 
     let read = create.open_reader();
     let chunk_out = read
-        .read_chunk::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 0])
+        .read_chunk::<i32>("foo/bar", &array_meta, smallvec![0, 0, 0])
         .expect("Failed to read chunk")
         .expect("Chunk is empty");
     let missing_chunk_out = read
-        .read_chunk::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 1])
+        .read_chunk::<i32>("foo/bar", &array_meta, smallvec![0, 0, 1])
         .expect("Failed to read chunk");
 
     assert_eq!(chunk_out.get_data(), &chunk_data[..]);
@@ -319,15 +319,15 @@ pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
     // Shorten data (this still will not catch trailing data less than the length).
     let chunk_data: Vec<i32> = (0..10_i32).collect();
     let chunk_in = crate::SliceDataChunk::new(
-        data_attrs.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_size.clone(),
         smallvec![0, 0, 0],
         &chunk_data,
     );
     create
-        .write_chunk("foo/bar", &data_attrs, &chunk_in)
+        .write_chunk("foo/bar", &array_meta, &chunk_in)
         .expect("Failed to write chunk");
     let chunk_out = read
-        .read_chunk::<i32>("foo/bar", &data_attrs, smallvec![0, 0, 0])
+        .read_chunk::<i32>("foo/bar", &array_meta, smallvec![0, 0, 0])
         .expect("Failed to read chunk")
         .expect("Chunk is empty");
 
@@ -337,7 +337,7 @@ pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
 pub(crate) fn delete_chunk<N: ZarrTestable>() {
     let wrapper = N::temp_new_rw();
     let create = wrapper.as_ref();
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![10, 100, 100],
         smallvec![5, 5, 5],
         DataType::INT32,
@@ -347,32 +347,32 @@ pub(crate) fn delete_chunk<N: ZarrTestable>() {
     let coord_a = smallvec![1, 2, 3];
     let coord_b: GridCoord = smallvec![1, 2, 4];
 
-    let dataset = "foo/bar";
+    let array = "foo/bar";
     let chunk_data: Vec<i32> = (0..125_i32).collect();
     let chunk_in = crate::SliceDataChunk::new(
-        data_attrs.chunk_grid.chunk_size.clone(),
+        array_meta.chunk_grid.chunk_size.clone(),
         coord_a.clone(),
         &chunk_data,
     );
 
     create
-        .create_dataset(dataset, &data_attrs)
-        .expect("Failed to create dataset");
+        .create_array(array, &array_meta)
+        .expect("Failed to create array");
     create
-        .write_chunk(dataset, &data_attrs, &chunk_in)
+        .write_chunk(array, &array_meta, &chunk_in)
         .expect("Failed to write chunk");
 
     assert!(create
-        .read_chunk::<i32>(dataset, &data_attrs, coord_a.clone())
+        .read_chunk::<i32>(array, &array_meta, coord_a.clone())
         .expect("Failed to read chunk")
         .is_some());
 
-    assert!(create.delete_chunk(dataset, &data_attrs, &coord_a).unwrap());
-    assert!(create.delete_chunk(dataset, &data_attrs, &coord_a).unwrap());
-    assert!(create.delete_chunk(dataset, &data_attrs, &coord_b).unwrap());
+    assert!(create.delete_chunk(array, &array_meta, &coord_a).unwrap());
+    assert!(create.delete_chunk(array, &array_meta, &coord_a).unwrap());
+    assert!(create.delete_chunk(array, &array_meta, &coord_b).unwrap());
 
     assert!(create
-        .read_chunk::<i32>(dataset, &data_attrs, coord_a.clone())
+        .read_chunk::<i32>(array, &array_meta, coord_a.clone())
         .expect("Failed to read chunk")
         .is_none());
 }
@@ -386,8 +386,8 @@ macro_rules! test_backend {
         }
 
         #[test]
-        fn create_dataset() {
-            $crate::tests::create_dataset::<$backend>()
+        fn create_array() {
+            $crate::tests::create_array::<$backend>()
         }
 
         #[test]

@@ -23,18 +23,18 @@ where
     rand::distributions::Standard: rand::distributions::Distribution<T>,
     VecDataChunk<T>: zarr::ReadableDataChunk + zarr::WriteableDataChunk,
 {
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![1024, 1024, 1024],
         smallvec![64, 64, 64],
         T::VARIANT,
         compression,
     );
-    let numel = data_attrs.get_chunk_num_elements();
+    let numel = array_meta.get_chunk_num_elements();
     let rng = rand::thread_rng();
     let chunk_data: Vec<T> = rng.sample_iter(&Standard).take(numel).collect();
 
     let chunk_in = VecDataChunk::new(
-        data_attrs.get_chunk_size().into(),
+        array_meta.get_chunk_size().into(),
         smallvec![0, 0, 0],
         chunk_data.clone(),
     );
@@ -42,17 +42,17 @@ where
     let mut inner: Vec<u8> = Vec::new();
 
     b.iter(|| {
-        DefaultChunk::write_chunk(&mut inner, &data_attrs, &chunk_in).expect("write_chunk failed");
+        DefaultChunk::write_chunk(&mut inner, &array_meta, &chunk_in).expect("write_chunk failed");
 
         let _chunk_out = <DefaultChunk as DefaultChunkReader<T, _>>::read_chunk(
             &inner[..],
-            &data_attrs,
+            &array_meta,
             smallvec![0, 0, 0],
         )
         .expect("read_chunk failed");
     });
 
-    b.bytes = (data_attrs.get_chunk_num_elements() * data_attrs.get_data_type().size_of()) as u64;
+    b.bytes = (array_meta.get_chunk_num_elements() * array_meta.get_data_type().size_of()) as u64;
 }
 
 #[bench]

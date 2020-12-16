@@ -23,7 +23,7 @@ pub use crate::{
     DataChunk,
     DataChunkMetadata,
     DataType,
-    DatasetAttributes,
+    ArrayMetadata,
     GridCoord,
     HierarchyLister,
     HierarchyReader,

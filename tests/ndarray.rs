@@ -17,17 +17,17 @@ fn test_read_ndarray() {
     let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
 
     let chunk_size = smallvec![3, 4, 2, 1];
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![3, 300, 200, 100],
         chunk_size.clone(),
         i32::VARIANT,
         CompressionType::default(),
     );
-    let numel = data_attrs.get_chunk_num_elements();
+    let numel = array_meta.get_chunk_num_elements();
 
-    let path_name = "test/dataset/group";
-    n.create_dataset(path_name, &data_attrs)
-        .expect("Failed to create dataset");
+    let path_name = "test/array/group";
+    n.create_array(path_name, &array_meta)
+        .expect("Failed to create array");
 
     for k in 0..10 {
         let z = chunk_size[3] * k;
@@ -53,7 +53,7 @@ fn test_read_ndarray() {
                     smallvec![0, u64::from(i), u64::from(j), u64::from(k)],
                     chunk_data,
                 );
-                n.write_chunk(path_name, &data_attrs, &chunk_in)
+                n.write_chunk(path_name, &array_meta, &chunk_in)
                     .expect("Failed to write chunk");
             }
         }
@@ -61,7 +61,7 @@ fn test_read_ndarray() {
 
     let bbox = BoundingBox::new(smallvec![0, 5, 4, 3], smallvec![3, 35, 15, 7]);
     let a = n
-        .read_ndarray::<i32>(path_name, &data_attrs, &bbox)
+        .read_ndarray::<i32>(path_name, &array_meta, &bbox)
         .unwrap();
 
     for z in 0..a.shape()[3] {
@@ -106,24 +106,24 @@ fn test_read_ndarray_oob() {
     let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
 
     let chunk_size = smallvec![50, 100];
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![100, 200],
         chunk_size.clone(),
         i32::VARIANT,
         CompressionType::default(),
     );
 
-    let path_name = "test/dataset/group";
-    n.create_dataset(path_name, &data_attrs)
-        .expect("Failed to create dataset");
+    let path_name = "test/array/group";
+    n.create_array(path_name, &array_meta)
+        .expect("Failed to create array");
 
     let chunk_in = VecDataChunk::new(smallvec![1, 1], smallvec![1, 1], vec![1]);
-    n.write_chunk(path_name, &data_attrs, &chunk_in)
+    n.write_chunk(path_name, &array_meta, &chunk_in)
         .expect("Failed to write chunk");
 
     let bbox = BoundingBox::new(smallvec![45, 175], smallvec![50, 50]);
     let a = n
-        .read_ndarray::<i32>(path_name, &data_attrs, &bbox)
+        .read_ndarray::<i32>(path_name, &array_meta, &bbox)
         .unwrap();
     assert!(a.iter().all(|v| *v == 0));
 }
@@ -135,16 +135,16 @@ fn test_write_read_ndarray() {
     let n = FilesystemHierarchy::open_or_create(dir.path()).expect("Failed to create Zarr filesystem");
 
     let chunk_size = smallvec![3, 4, 2, 1];
-    let data_attrs = DatasetAttributes::new(
+    let array_meta = ArrayMetadata::new(
         smallvec![3, 300, 200, 100],
         chunk_size.clone(),
         i32::VARIANT,
         CompressionType::default(),
     );
 
-    let path_name = "test/dataset/group";
-    n.create_dataset(path_name, &data_attrs)
-        .expect("Failed to create dataset");
+    let path_name = "test/array/group";
+    n.create_array(path_name, &array_meta)
+        .expect("Failed to create array");
 
     let rng = rand::thread_rng();
     let arr_shape = [3, 35, 15, 7];
@@ -155,16 +155,16 @@ fn test_write_read_ndarray() {
             .into_dyn();
     let offset = smallvec![0, 5, 4, 3];
 
-    n.write_ndarray(path_name, &data_attrs, offset.clone(), &array, 0)
+    n.write_ndarray(path_name, &array_meta, offset.clone(), &array, 0)
         .unwrap();
 
     let bbox = BoundingBox::new(offset, arr_shape.iter().map(|s| *s as u64).collect());
     let a = n
-        .read_ndarray::<i32>("test/dataset/group", &data_attrs, &bbox)
+        .read_ndarray::<i32>("test/array/group", &array_meta, &bbox)
         .unwrap();
     // Also test c-order.
     let mut a_c = Array::zeros(bbox.size_ndarray_shape().as_slice());
-    n.read_ndarray_into::<i32>("test/dataset/group", &data_attrs, &bbox, a_c.view_mut())
+    n.read_ndarray_into::<i32>("test/array/group", &array_meta, &bbox, a_c.view_mut())
         .unwrap();
 
     assert_eq!(array, a);
