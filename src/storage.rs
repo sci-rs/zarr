@@ -9,6 +9,7 @@ use semver::VersionReq;
 use serde_json::Value;
 
 use crate::{
+    canonicalize_path,
     chunk::{
         DataChunk,
         ReadableDataChunk,
@@ -80,7 +81,12 @@ pub trait WriteableStore {
 pub fn get_chunk_key(base_path: &str, array_meta: &ArrayMetadata, grid_position: &[u64]) -> String {
     use std::fmt::Write;
     // TODO: normalize relative or absolute paths
-    let mut chunk_key = format!("{}{}/c", crate::DATA_ROOT_PATH, base_path);
+    let canon_path = canonicalize_path(base_path);
+    let mut chunk_key = if canon_path.is_empty() {
+        format!("{}/c", crate::DATA_ROOT_PATH,)
+    } else {
+        format!("{}/{}/c", crate::DATA_ROOT_PATH, canon_path)
+    };
 
     for (i, coord) in grid_position.iter().enumerate() {
         write!(chunk_key, "{}", coord).unwrap();

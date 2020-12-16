@@ -86,8 +86,8 @@ fn add_extension(path: &mut std::path::PathBuf, extension: impl AsRef<std::path:
 const ENTRY_POINT_KEY: &str = "zarr.json";
 const DATA_ROOT_PATH: &str = "/data/root";
 const META_ROOT_PATH: &str = "/meta/root";
-const ARRAY_METADATA_KEY_EXT: &str = ".array";
-const GROUP_METADATA_KEY_EXT: &str = ".group";
+const ARRAY_METADATA_KEY_EXT: &str = "array";
+const GROUP_METADATA_KEY_EXT: &str = "group";
 
 /// Store metadata about a node.
 ///
@@ -120,31 +120,36 @@ impl Default for EntryPointMetadata {
     }
 }
 
+/// Canonicalize path for concatenation into keys by stripping leading or trailing
+/// slashes. This does not attempt to remove roots or relative paths as the
+/// store may do.
+fn canonicalize_path(path: &str) -> &str {
+    path.trim_start_matches('/').trim_end_matches('/')
+}
+
 pub trait Hierarchy {
     fn get_entry_point_metadata(&self) -> &EntryPointMetadata;
 
     fn array_metadata_key(&self, path_name: &str) -> PathBuf {
-        let mut key = PathBuf::from(META_ROOT_PATH).join(path_name);
+        let mut key = PathBuf::from(META_ROOT_PATH).join(canonicalize_path(path_name));
+        let suffix = &self.get_entry_point_metadata().metadata_key_suffix;
+        let suffix = suffix.strip_prefix('.').unwrap_or(suffix);
         add_extension(&mut key, ARRAY_METADATA_KEY_EXT);
-        add_extension(
-            &mut key,
-            &self.get_entry_point_metadata().metadata_key_suffix,
-        );
+        add_extension(&mut key, suffix);
         key
     }
 
     fn group_metadata_key(&self, path_name: &str) -> PathBuf {
-        let mut key = PathBuf::from(META_ROOT_PATH).join(path_name);
+        let mut key = PathBuf::from(META_ROOT_PATH).join(canonicalize_path(path_name));
+        let suffix = &self.get_entry_point_metadata().metadata_key_suffix;
+        let suffix = suffix.strip_prefix('.').unwrap_or(suffix);
         add_extension(&mut key, GROUP_METADATA_KEY_EXT);
-        add_extension(
-            &mut key,
-            &self.get_entry_point_metadata().metadata_key_suffix,
-        );
+        add_extension(&mut key, suffix);
         key
     }
 
     fn data_path_key(&self, path_name: &str) -> PathBuf {
-        PathBuf::from(DATA_ROOT_PATH).join(path_name)
+        PathBuf::from(DATA_ROOT_PATH).join(canonicalize_path(path_name))
     }
 }
 
@@ -159,7 +164,7 @@ pub trait HierarchyReader: Hierarchy {
     /// Test whether a group or array exists.
     fn exists(&self, path_name: &str) -> Result<bool, Error>;
 
-    /// Test whether a array exists.
+    /// Test whether an array exists.
     fn array_exists(&self, path_name: &str) -> Result<bool, Error> {
         Ok(self.exists(path_name)? && self.get_array_metadata(path_name).is_ok())
     }
@@ -174,9 +179,7 @@ pub trait HierarchyReader: Hierarchy {
         path_name: &str,
         array_meta: &ArrayMetadata,
         grid_position: &[u64],
-    ) -> Result<String, Error> {
-        todo!()
-    }
+    ) -> Result<String, Error>;
 
     /// Read a single array chunk into a linear vec.
     fn read_chunk<T>(
@@ -256,7 +259,7 @@ pub trait HierarchyWriter: HierarchyReader {
     /// Create a group (directory).
     fn create_group(&self, path_name: &str) -> Result<(), Error>;
 
-    /// Create a array. This will create the array group and attributes,
+    /// Create an array. This will create the array group and attributes,
     /// but not populate any chunk data.
     fn create_array(&self, path_name: &str, array_meta: &ArrayMetadata) -> Result<(), Error>;
 
@@ -277,7 +280,7 @@ pub trait HierarchyWriter: HierarchyReader {
         chunk: &B,
     ) -> Result<(), Error>;
 
-    /// Delete a chunk from a array.
+    /// Delete a chunk from an array.
     ///
     /// Returns `true` if the chunk does not exist on the backend at the
     /// completion of the call.
