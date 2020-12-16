@@ -31,6 +31,10 @@ use crate::{
         DefaultChunkWriter,
     },
     is_version_compatible,
+    storage::{
+        ReadableStore,
+        WriteableStore,
+    },
     ArrayMetadata,
     DataChunk,
     DataChunkMetadata,
@@ -41,13 +45,11 @@ use crate::{
     HierarchyReader,
     HierarchyWriter,
     ReadableDataChunk,
-    ReadableStore,
     ReflectedType,
     ReinitDataChunk,
     VecDataChunk,
     Version,
     WriteableDataChunk,
-    WriteableStore,
 };
 
 // TODO
