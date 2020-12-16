@@ -379,7 +379,7 @@ impl<T: HierarchyWriter> ZarrNdarrayWriter for T {}
 impl ArrayMetadata {
     pub fn coord_iter(&self) -> impl Iterator<Item = Vec<u64>> + ExactSizeIterator {
         let coord_ceil = self
-            .get_dimensions()
+            .get_shape()
             .iter()
             .zip(self.get_chunk_size().iter())
             .map(|(&d, &s)| (d + u64::from(s) - 1) / u64::from(s))
@@ -411,8 +411,8 @@ impl ArrayMetadata {
 
     pub fn get_bounds(&self) -> BoundingBox {
         BoundingBox {
-            offset: smallvec![0; self.dimensions.len()],
-            size: self.dimensions.clone(),
+            offset: smallvec![0; self.shape.len()],
+            size: self.shape.clone(),
         }
     }
 
@@ -426,7 +426,7 @@ impl ArrayMetadata {
         let offset: GridCoord = coord.iter().zip(size.iter()).map(|(c, s)| c * s).collect();
         size.iter_mut()
             .zip(offset.iter())
-            .zip(self.get_dimensions().iter())
+            .zip(self.get_shape().iter())
             .for_each(|((s, o), d)| *s = cmp::min(*s + *o, *d) - *o);
         BoundingBox { offset, size }
     }

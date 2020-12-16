@@ -316,7 +316,7 @@ impl Default for GroupMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct ArrayMetadata {
     /// Dimensions of the entire array, in voxels.
-    dimensions: GridCoord,
+    shape: GridCoord,
     /// Element data type.
     data_type: DataType,
     /// Compression scheme for voxel data in each chunk.
@@ -336,18 +336,18 @@ pub struct ChunkGridMetadata {
 
 impl ArrayMetadata {
     pub fn new(
-        dimensions: GridCoord,
+        shape: GridCoord,
         chunk_size: ChunkCoord,
         data_type: DataType,
         compression: compression::CompressionType,
     ) -> ArrayMetadata {
         assert_eq!(
-            dimensions.len(),
+            shape.len(),
             chunk_size.len(),
-            "Number of array dimensions must match number of chunk size dimensions."
+            "Number of array shape must match number of chunk size shape."
         );
         ArrayMetadata {
-            dimensions,
+            shape,
             data_type,
             compression,
             // TODO
@@ -358,8 +358,8 @@ impl ArrayMetadata {
         }
     }
 
-    pub fn get_dimensions(&self) -> &[u64] {
-        &self.dimensions
+    pub fn get_shape(&self) -> &[u64] {
+        &self.shape
     }
 
     pub fn get_chunk_size(&self) -> &[u32] {
@@ -375,12 +375,12 @@ impl ArrayMetadata {
     }
 
     pub fn get_ndim(&self) -> usize {
-        self.dimensions.len()
+        self.shape.len()
     }
 
-    /// Get the total number of elements possible given the dimensions.
+    /// Get the total number of elements possible given the shape.
     pub fn get_num_elements(&self) -> usize {
-        self.dimensions.iter().map(|&d| d as usize).product()
+        self.shape.iter().map(|&d| d as usize).product()
     }
 
     /// Get the total number of elements possible in a chunk.
@@ -394,7 +394,7 @@ impl ArrayMetadata {
 
     /// Get the upper bound extent of grid coordinates.
     pub fn get_grid_extent(&self) -> GridCoord {
-        self.dimensions
+        self.shape
             .iter()
             .zip(self.chunk_grid.chunk_size.iter().cloned().map(u64::from))
             .map(|(d, b)| u64_ceil_div(*d, b))
@@ -431,7 +431,7 @@ impl ArrayMetadata {
     /// assert!(!attrs.in_bounds(&smallvec![5, 3, 2]));
     /// ```
     pub fn in_bounds(&self, grid_position: &GridCoord) -> bool {
-        self.dimensions.len() == grid_position.len()
+        self.shape.len() == grid_position.len()
             && self
                 .get_grid_extent()
                 .iter()
