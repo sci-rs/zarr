@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use half::f16;
 use serde::{
     Deserialize,
@@ -105,6 +107,8 @@ impl Endian {
 /// assert_eq!(d, DataType::Float {size: FloatSize::B8, endian: Endian::Little});
 /// let d: DataType = serde_json::from_str("\">u4\"").unwrap();
 /// assert_eq!(d, DataType::UInt {size: IntSize::B4, endian: Endian::Big});
+/// let d: DataType = serde_json::from_str("\"r24\"").unwrap();
+/// assert_eq!(d, DataType::Raw {size: 24});
 /// ```
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum DataType {
@@ -112,6 +116,7 @@ pub enum DataType {
     Int { size: IntSize, endian: Endian },
     UInt { size: IntSize, endian: Endian },
     Float { size: FloatSize, endian: Endian },
+    Raw { size: usize },
 }
 
 impl Serialize for DataType {
@@ -120,7 +125,7 @@ impl Serialize for DataType {
         S: serde::Serializer,
     {
         use DataType::*;
-        let mut buf = [0u8; 3];
+        let mut buf = [0u8; 32];
         let s = match self {
             Bool => "bool",
             Int {
@@ -133,18 +138,22 @@ impl Serialize for DataType {
                 endian.serial_char().encode_utf8(&mut buf[0..1]);
                 'i'.encode_utf8(&mut buf[1..2]);
                 size.serial_char().encode_utf8(&mut buf[2..3]);
-                std::str::from_utf8(&buf[..]).unwrap()
+                std::str::from_utf8(&buf[..3]).unwrap()
             }
             UInt { size, endian } => {
                 endian.serial_char().encode_utf8(&mut buf[0..1]);
                 'u'.encode_utf8(&mut buf[1..2]);
                 size.serial_char().encode_utf8(&mut buf[2..3]);
-                std::str::from_utf8(&buf[..]).unwrap()
+                std::str::from_utf8(&buf[..3]).unwrap()
             }
             Float { size, endian } => {
                 endian.serial_char().encode_utf8(&mut buf[0..1]);
                 'f'.encode_utf8(&mut buf[1..2]);
                 size.serial_char().encode_utf8(&mut buf[2..3]);
+                std::str::from_utf8(&buf[..3]).unwrap()
+            }
+            Raw { size } => {
+                write!(&mut buf[..], "r{}", size).expect("TODO");
                 std::str::from_utf8(&buf[..]).unwrap()
             }
         };
@@ -177,6 +186,24 @@ impl<'de> serde::de::Visitor<'de> for DataTypeVisitor {
                 size: IntSize::B1,
                 endian: Endian::Little,
             },
+            dtype @ _ if dtype.chars().nth(0) == Some('r') => {
+                if let Ok(size) = dtype[1..].parse::<usize>() {
+                    if size % 8 == 0 {
+                        DataType::Raw { size }
+                    } else {
+                        // TODO: more specific error?
+                        return Err(serde::de::Error::invalid_value(
+                            serde::de::Unexpected::Str(value),
+                            &self,
+                        ));
+                    }
+                } else {
+                    return Err(serde::de::Error::invalid_value(
+                        serde::de::Unexpected::Str(value),
+                        &self,
+                    ));
+                }
+            }
             dtype @ _ if dtype.len() == 3 => {
                 let endian = Endian::deserial_char(dtype.chars().nth(0).unwrap()).expect("TODO");
                 match dtype.chars().nth(1).unwrap() {
@@ -287,6 +314,25 @@ macro_rules! data_type_rstype_replace {
 /// appropriate for that arm.
 #[macro_export]
 macro_rules! data_type_match {
+    ($match_expr:expr, $raw_match:pat => $raw_expr:expr, $($expr:tt)*) => {
+        {
+            match $match_expr {
+                $crate::DataType::Bool => $crate::data_type_rstype_replace!(bool, $($expr)*),
+                $crate::DataType::UInt {size: IntSize::B1, ..} => $crate::data_type_rstype_replace!(u8, $($expr)*),
+                $crate::DataType::UInt {size: IntSize::B2, ..}=> $crate::data_type_rstype_replace!(u16, $($expr)*),
+                $crate::DataType::UInt {size: IntSize::B4, ..} => $crate::data_type_rstype_replace!(u32, $($expr)*),
+                $crate::DataType::UInt {size: IntSize::B8, ..} => $crate::data_type_rstype_replace!(u64, $($expr)*),
+                $crate::DataType::Int {size: IntSize::B1, ..} => $crate::data_type_rstype_replace!(i8, $($expr)*),
+                $crate::DataType::Int {size: IntSize::B2, ..}=> $crate::data_type_rstype_replace!(i16, $($expr)*),
+                $crate::DataType::Int {size: IntSize::B4, ..} => $crate::data_type_rstype_replace!(i32, $($expr)*),
+                $crate::DataType::Int {size: IntSize::B8, ..} => $crate::data_type_rstype_replace!(i64, $($expr)*),
+                $crate::DataType::Float {size: FloatSize::B2, ..}=> $crate::data_type_rstype_replace!(f16, $($expr)*),
+                $crate::DataType::Float {size: FloatSize::B4, ..} => $crate::data_type_rstype_replace!(f32, $($expr)*),
+                $crate::DataType::Float {size: FloatSize::B8, ..} => $crate::data_type_rstype_replace!(f64, $($expr)*),
+                $raw_match => $raw_expr,
+            }
+        }
+    };
     ($match_expr:expr, $($expr:tt)*) => {
         {
             match $match_expr {
@@ -302,6 +348,7 @@ macro_rules! data_type_match {
                 $crate::DataType::Float {size: FloatSize::B2, ..}=> $crate::data_type_rstype_replace!(f16, $($expr)*),
                 $crate::DataType::Float {size: FloatSize::B4, ..} => $crate::data_type_rstype_replace!(f32, $($expr)*),
                 $crate::DataType::Float {size: FloatSize::B8, ..} => $crate::data_type_rstype_replace!(f64, $($expr)*),
+                $crate::DataType::Raw { .. } => $crate::data_type_rstype_replace!([u8], $($expr)*),
             }
         }
     };
@@ -310,7 +357,9 @@ macro_rules! data_type_match {
 impl DataType {
     /// Boilerplate method for reflection of primitive type sizes.
     pub fn size_of(self) -> usize {
-        data_type_match!(self, { std::mem::size_of::<RsType>() })
+        data_type_match!(self, DataType::Raw { size } => { std::mem::size_of::<u8>() * size / 8 }, {
+            std::mem::size_of::<RsType>()
+        })
     }
 
     pub fn endian(self) -> Endian {
@@ -367,6 +416,12 @@ macro_rules! reflected_type {
 #[rustfmt::skip] reflected_type!(DataType::Float {size: FloatSize::B4, endian: NATIVE_ENDIAN}, f32);
 #[rustfmt::skip] reflected_type!(DataType::Float {size: FloatSize::B8, endian: NATIVE_ENDIAN}, f64);
 
+// TODO: As example
+#[rustfmt::skip] reflected_type!(DataType::Raw {size: 8}, [u8; 1]);
+#[rustfmt::skip] reflected_type!(DataType::Raw {size: 16}, [u8; 2]);
+#[rustfmt::skip] reflected_type!(DataType::Raw {size: 24}, [u8; 3]);
+#[rustfmt::skip] reflected_type!(DataType::Raw {size: 32}, [u8; 4]);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,5 +444,9 @@ mod tests {
         test_data_type_reflection::<f16>();
         test_data_type_reflection::<f32>();
         test_data_type_reflection::<f64>();
+        test_data_type_reflection::<[u8; 1]>();
+        test_data_type_reflection::<[u8; 2]>();
+        test_data_type_reflection::<[u8; 3]>();
+        test_data_type_reflection::<[u8; 4]>();
     }
 }
