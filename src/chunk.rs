@@ -1,7 +1,3 @@
-use std::io::{
-    Error,
-    ErrorKind,
-};
 use std::marker::PhantomData;
 
 use byteorder::{
@@ -20,23 +16,14 @@ use crate::{
     ChunkCoord,
     GridCoord,
     ReflectedType,
-    ZarrEndian,
 };
-
-/// Unencoded, non-payload header of a data chunk.
-#[derive(Debug)]
-pub struct ChunkHeader {
-    pub(crate) size: ChunkCoord,
-    pub(crate) grid_position: GridCoord,
-    pub(crate) num_el: usize,
-}
 
 /// Traits for data chunks that can be reused as a different chunks after
 /// construction.
 pub trait ReinitDataChunk<T> {
     /// Reinitialize this data chunk with a new header, reallocating as
     /// necessary.
-    fn reinitialize(&mut self, header: ChunkHeader);
+    fn reinitialize(&mut self, grid_position: &GridCoord, num_el: u32);
 
     /// Reinitialize this data chunk with the header and data of another chunk.
     fn reinitialize_with<B: DataChunk<T>>(&mut self, other: &B);
@@ -69,21 +56,11 @@ pub trait WriteableDataChunk {
 ///
 /// To enable custom types to be written to Zarr volumes, implement this trait.
 pub trait DataChunk<T> {
-    fn get_size(&self) -> &[u32];
-
     fn get_grid_position(&self) -> &[u64];
 
     fn get_data(&self) -> &[T];
 
     fn get_num_elements(&self) -> u32;
-
-    fn get_header(&self) -> ChunkHeader {
-        ChunkHeader {
-            size: self.get_size().into(),
-            grid_position: self.get_grid_position().into(),
-            num_el: self.get_num_elements() as usize,
-        }
-    }
 }
 
 /// A generic data chunk container wrapping any type that can be taken as a
@@ -91,16 +68,14 @@ pub trait DataChunk<T> {
 #[derive(Clone, Debug)]
 pub struct SliceDataChunk<T: ReflectedType, C> {
     data_type: PhantomData<T>,
-    size: ChunkCoord,
     grid_position: GridCoord,
     data: C,
 }
 
 impl<T: ReflectedType, C> SliceDataChunk<T, C> {
-    pub fn new(size: ChunkCoord, grid_position: GridCoord, data: C) -> SliceDataChunk<T, C> {
+    pub fn new(grid_position: GridCoord, data: C) -> SliceDataChunk<T, C> {
         SliceDataChunk {
             data_type: PhantomData,
-            size,
             grid_position,
             data,
         }
@@ -116,14 +91,12 @@ impl<T: ReflectedType, C> SliceDataChunk<T, C> {
 pub type VecDataChunk<T> = SliceDataChunk<T, Vec<T>>;
 
 impl<T: ReflectedType> ReinitDataChunk<T> for VecDataChunk<T> {
-    fn reinitialize(&mut self, header: ChunkHeader) {
-        self.size = header.size;
-        self.grid_position = header.grid_position;
-        self.data.resize_with(header.num_el, Default::default);
+    fn reinitialize(&mut self, grid_position: &GridCoord, num_el: u32) {
+        self.grid_position = grid_position.clone();
+        self.data.resize_with(num_el as usize, Default::default);
     }
 
     fn reinitialize_with<B: DataChunk<T>>(&mut self, other: &B) {
-        self.size = other.get_size().into();
         self.grid_position = other.get_grid_position().into();
         self.data.clear();
         self.data.extend_from_slice(other.get_data());
@@ -291,10 +264,6 @@ impl<C: AsRef<[f16]>> WriteableDataChunk for SliceDataChunk<f16, C> {
 }
 
 impl<T: ReflectedType, C: AsRef<[T]>> DataChunk<T> for SliceDataChunk<T, C> {
-    fn get_size(&self) -> &[u32] {
-        &self.size
-    }
-
     fn get_grid_position(&self) -> &[u64] {
         &self.grid_position
     }
@@ -308,33 +277,8 @@ impl<T: ReflectedType, C: AsRef<[T]>> DataChunk<T> for SliceDataChunk<T, C> {
     }
 }
 
-const CHUNK_FIXED_LEN: u16 = 0;
-const CHUNK_VAR_LEN: u16 = 1;
-
-pub trait DefaultChunkHeaderReader<R: std::io::Read> {
-    fn read_chunk_header(buffer: &mut R, grid_position: GridCoord) -> std::io::Result<ChunkHeader> {
-        let mode = buffer.read_u16::<ZarrEndian>()?;
-        let ndim = buffer.read_u16::<ZarrEndian>()?;
-        let mut size = smallvec![0; ndim as usize];
-        buffer.read_u32_into::<ZarrEndian>(&mut size)?;
-        let num_el = match mode {
-            CHUNK_FIXED_LEN => size.iter().product(),
-            CHUNK_VAR_LEN => buffer.read_u32::<ZarrEndian>()?,
-            _ => return Err(Error::new(ErrorKind::InvalidData, "Unsupported chunk mode")),
-        };
-
-        Ok(ChunkHeader {
-            size,
-            grid_position,
-            num_el: num_el as usize,
-        })
-    }
-}
-
 /// Reads chunks from rust readers.
-pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read>:
-    DefaultChunkHeaderReader<R>
-{
+pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read> {
     fn read_chunk(
         mut buffer: R,
         array_meta: &ArrayMetadata,
@@ -350,9 +294,9 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read>:
         //         "Attempt to create data chunk for wrong type.",
         //     ));
         // }
-        let header = Self::read_chunk_header(&mut buffer, grid_position)?;
 
-        let mut chunk = T::create_data_chunk(header);
+        let mut chunk =
+            T::create_data_chunk(&grid_position, array_meta.get_chunk_num_elements() as u32);
         let mut decompressed = array_meta.compressor.decoder(buffer);
         chunk.read_data(&mut decompressed, array_meta)?;
 
@@ -372,9 +316,8 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read>:
         //         "Attempt to create data chunk for wrong type.",
         //     ));
         // }
-        let header = Self::read_chunk_header(&mut buffer, grid_position)?;
 
-        chunk.reinitialize(header);
+        chunk.reinitialize(&grid_position, array_meta.get_chunk_num_elements() as u32);
         let mut decompressed = array_meta.compressor.decoder(buffer);
         chunk.read_data(&mut decompressed, array_meta)?;
 
@@ -398,21 +341,6 @@ pub trait DefaultChunkWriter<
         //     ));
         // }
 
-        let mode: u16 = if chunk.get_num_elements() == chunk.get_size().iter().product::<u32>() {
-            CHUNK_FIXED_LEN
-        } else {
-            CHUNK_VAR_LEN
-        };
-        buffer.write_u16::<ZarrEndian>(mode)?;
-        buffer.write_u16::<ZarrEndian>(array_meta.get_ndim() as u16)?;
-        for i in chunk.get_size() {
-            buffer.write_u32::<ZarrEndian>(*i)?;
-        }
-
-        if mode != CHUNK_FIXED_LEN {
-            buffer.write_u32::<ZarrEndian>(chunk.get_num_elements())?;
-        }
-
         let mut compressor = array_meta.compressor.encoder(buffer);
         chunk.write_data(&mut compressor, array_meta)?;
 
@@ -425,7 +353,6 @@ pub trait DefaultChunkWriter<
 // `DefaultChunkReader`, etc.
 #[derive(Debug)]
 pub struct DefaultChunk;
-impl<R: std::io::Read> DefaultChunkHeaderReader<R> for DefaultChunk {}
 impl<T: ReflectedType, R: std::io::Read> DefaultChunkReader<T, R> for DefaultChunk {}
 impl<T: ReflectedType, W: std::io::Write, B: DataChunk<T> + WriteableDataChunk>
     DefaultChunkWriter<T, W, B> for DefaultChunk

@@ -322,7 +322,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                 // going to be entirely overwriten.
                 chunk_vec.clear();
                 chunk_vec.extend(arr_view.t().iter().cloned());
-                let chunk = VecDataChunk::new(write_bb.shape_chunk(), coord.into(), chunk_vec);
+                let chunk = VecDataChunk::new(coord.into(), chunk_vec);
 
                 self.write_chunk(path_name, array_meta, &chunk)?;
                 chunk_vec = chunk.into_data();
@@ -366,7 +366,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
 
                 chunk_vec.clear();
                 chunk_vec.extend(chunk_array.t().iter().cloned());
-                let chunk = VecDataChunk::new(chunk_bb.shape_chunk(), coord.into(), chunk_vec);
+                let chunk = VecDataChunk::new(coord.into(), chunk_vec);
 
                 self.write_chunk(path_name, array_meta, &chunk)?;
                 chunk_vec = chunk.into_data();
@@ -441,7 +441,12 @@ impl<T: ReflectedType, C: AsRef<[T]>> SliceDataChunk<T, C> {
     /// be smaller than the nominal bounding box expected from the array.
     pub fn get_bounds(&self, array_meta: &ArrayMetadata) -> BoundingBox {
         let mut bbox = array_meta.get_chunk_bounds(self.get_grid_position());
-        bbox.shape = self.get_size().iter().cloned().map(u64::from).collect();
+        bbox.shape = array_meta
+            .get_chunk_shape()
+            .iter()
+            .cloned()
+            .map(u64::from)
+            .collect();
         bbox
     }
 }

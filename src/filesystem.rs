@@ -447,11 +447,7 @@ mod tests {
             ),
         );
         let chunk_data: Vec<i32> = (0..125_i32).collect();
-        let chunk_in = crate::SliceDataChunk::new(
-            array_meta.chunk_grid.chunk_shape.clone(),
-            smallvec![0, 0, 0],
-            &chunk_data,
-        );
+        let chunk_in = crate::SliceDataChunk::new(smallvec![0, 0, 0], &chunk_data);
 
         create
             .create_array("foo/bar", &array_meta)
@@ -474,11 +470,7 @@ mod tests {
 
         // Shorten data (this still will not catch trailing data less than the length).
         let chunk_data: Vec<i32> = (0..10_i32).collect();
-        let chunk_in = crate::SliceDataChunk::new(
-            array_meta.chunk_grid.chunk_shape.clone(),
-            smallvec![0, 0, 0],
-            &chunk_data,
-        );
+        let chunk_in = crate::SliceDataChunk::new(smallvec![0, 0, 0], &chunk_data);
         create
             .write_chunk("foo/bar", &array_meta, &chunk_in)
             .expect("Failed to write chunk");

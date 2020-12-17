@@ -26,7 +26,7 @@ fn test_read_write<T, Zarr: HierarchyReader + HierarchyWriter>(
     let rng = rand::thread_rng();
     let chunk_data: Vec<T> = rng.sample_iter(&Standard).take(numel).collect();
 
-    let chunk_in = SliceDataChunk::new(chunk_shape, smallvec![0; dim], chunk_data);
+    let chunk_in = SliceDataChunk::new(smallvec![0; dim], chunk_data);
 
     let path_name = "test/array/group";
 
@@ -43,7 +43,7 @@ fn test_read_write<T, Zarr: HierarchyReader + HierarchyWriter>(
         .expect("Chunk is empty");
     assert_eq!(chunk_out.get_data(), &chunk_data[..]);
 
-    let mut into_chunk = VecDataChunk::new(smallvec![0; dim], smallvec![0; dim], vec![]);
+    let mut into_chunk = VecDataChunk::new(smallvec![0; dim], vec![]);
     n.read_chunk_into(path_name, &array_meta, smallvec![0; dim], &mut into_chunk)
         .expect("Failed to read chunk")
         .expect("Chunk is empty");

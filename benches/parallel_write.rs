@@ -95,13 +95,12 @@ where
     for x in 0..N_CHUNKS {
         for y in 0..N_CHUNKS {
             for z in 0..N_CHUNKS {
-                let bs = chunk_shape.clone();
                 let bd = bd.clone();
                 let ni = n.clone();
                 let pn = path_name.clone();
                 let da = array_meta.clone();
                 all_jobs.push(pool.spawn_fn(move || {
-                    let chunk_in = SliceDataChunk::new(bs, smallvec![x, y, z], bd);
+                    let chunk_in = SliceDataChunk::new(smallvec![x, y, z], bd);
                     ni.write_chunk(&pn, &da, &chunk_in)
                         .expect("Failed to write chunk");
                     Ok(0)

@@ -6,7 +6,7 @@ use serde::{
     Serialize,
 };
 
-use crate::chunk::ChunkHeader;
+use crate::GridCoord;
 use crate::VecDataChunk;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -386,11 +386,10 @@ impl std::fmt::Display for DataType {
 pub trait ReflectedType: Send + Sync + Clone + Default + 'static {
     const ZARR_TYPE: DataType;
 
-    fn create_data_chunk(header: ChunkHeader) -> VecDataChunk<Self> {
+    fn create_data_chunk(grid_position: &GridCoord, num_el: u32) -> VecDataChunk<Self> {
         VecDataChunk::<Self>::new(
-            header.size,
-            header.grid_position,
-            vec![Self::default(); header.num_el],
+            grid_position.clone(),
+            vec![Self::default(); num_el as usize],
         )
     }
 }

@@ -50,7 +50,6 @@ fn test_read_ndarray() {
                 }
 
                 let chunk_in = VecDataChunk::new(
-                    chunk_shape.clone(),
                     smallvec![0, u64::from(i), u64::from(j), u64::from(k)],
                     chunk_data,
                 );
@@ -119,7 +118,7 @@ fn test_read_ndarray_oob() {
     n.create_array(path_name, &array_meta)
         .expect("Failed to create array");
 
-    let chunk_in = VecDataChunk::new(smallvec![1, 1], smallvec![1, 1], vec![1]);
+    let chunk_in = VecDataChunk::new(smallvec![1, 1], vec![1]);
     n.write_chunk(path_name, &array_meta, &chunk_in)
         .expect("Failed to write chunk");
 

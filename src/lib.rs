@@ -16,7 +16,6 @@ use std::io::Error;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use byteorder::BigEndian;
 use serde::{
     Deserialize,
     Serialize,
@@ -58,8 +57,6 @@ const COORD_SMALLVEC_SIZE: usize = 6;
 pub type CoordVec<T> = SmallVec<[T; COORD_SMALLVEC_SIZE]>;
 pub type ChunkCoord = CoordVec<u32>;
 pub type GridCoord = CoordVec<u64>;
-
-type ZarrEndian = BigEndian;
 
 /// Version of the Zarr spec supported by this library.
 pub const VERSION: Version = Version {

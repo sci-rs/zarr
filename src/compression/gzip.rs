@@ -64,12 +64,12 @@ mod tests {
 
     // Example from the zarr documentation spec.
     #[rustfmt::skip]
-    const TEST_CHUNK_I16_GZIP: [u8; 48] = [
-        0x00, 0x00,
-        0x00, 0x03,
-        0x00, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x02,
-        0x00, 0x00, 0x00, 0x03,
+    const TEST_CHUNK_I16_GZIP: [u8; 32] = [
+        // 0x00, 0x00,
+        // 0x00, 0x03,
+        // 0x00, 0x00, 0x00, 0x01,
+        // 0x00, 0x00, 0x00, 0x02,
+        // 0x00, 0x00, 0x00, 0x03,
         0x1f, 0x8b, 0x08, 0x00,
         0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x63, 0x60,
@@ -94,7 +94,7 @@ mod tests {
         // The difference is one byte: the operating system ID.
         // Java uses 0 (FAT) while flate2 usese 255 (unknown).
         let mut fudge_test_chunk = TEST_CHUNK_I16_GZIP.clone();
-        fudge_test_chunk[25] = 255;
+        fudge_test_chunk[9] = 255;
         crate::tests::test_write_doc_spec_chunk(
             &fudge_test_chunk,
             CompressionType::Gzip(GzipCompression::default()),

@@ -57,7 +57,6 @@ pub(crate) fn test_read_doc_spec_chunk(chunk: &[u8], compression: compression::C
     )
     .expect("read_chunk failed");
 
-    assert_eq!(chunk.get_size(), array_meta.get_chunk_shape());
     assert_eq!(chunk.get_grid_position(), &[0, 0, 0]);
     assert_eq!(chunk.get_data(), &DOC_SPEC_CHUNK_DATA);
 }
@@ -67,11 +66,7 @@ pub(crate) fn test_write_doc_spec_chunk(
     compression: compression::CompressionType,
 ) {
     let array_meta = doc_spec_array_attributes(compression);
-    let chunk_in = SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_shape.clone(),
-        smallvec![0, 0, 0],
-        DOC_SPEC_CHUNK_DATA,
-    );
+    let chunk_in = SliceDataChunk::new(smallvec![0, 0, 0], DOC_SPEC_CHUNK_DATA);
     let mut buff: Vec<u8> = Vec::new();
 
     <DefaultChunk as DefaultChunkWriter<i16, _, _>>::write_chunk(&mut buff, &array_meta, &chunk_in)
@@ -88,11 +83,7 @@ pub(crate) fn test_chunk_compression_rw(compression: compression::CompressionTyp
         compression,
     );
     let chunk_data: Vec<i32> = (0..125_i32).collect();
-    let chunk_in = SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_shape.clone(),
-        smallvec![0, 0, 0],
-        &chunk_data,
-    );
+    let chunk_in = SliceDataChunk::new(smallvec![0, 0, 0], &chunk_data);
 
     let mut inner: Vec<u8> = Vec::new();
 
@@ -110,7 +101,6 @@ pub(crate) fn test_chunk_compression_rw(compression: compression::CompressionTyp
     )
     .expect("read_chunk failed");
 
-    assert_eq!(chunk_out.get_size(), &[5, 5, 5]);
     assert_eq!(chunk_out.get_grid_position(), &[0, 0, 0]);
     assert_eq!(chunk_out.get_data(), &chunk_data[..]);
 }
@@ -123,11 +113,7 @@ pub(crate) fn test_varlength_chunk_rw(compression: compression::CompressionType)
         compression,
     );
     let chunk_data: Vec<i32> = (0..100_i32).collect();
-    let chunk_in = SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_shape.clone(),
-        smallvec![0, 0, 0],
-        &chunk_data,
-    );
+    let chunk_in = SliceDataChunk::new(smallvec![0, 0, 0], &chunk_data);
 
     let mut inner: Vec<u8> = Vec::new();
 
@@ -145,7 +131,6 @@ pub(crate) fn test_varlength_chunk_rw(compression: compression::CompressionType)
     )
     .expect("read_chunk failed");
 
-    assert_eq!(chunk_out.get_size(), &[5, 5, 5]);
     assert_eq!(chunk_out.get_grid_position(), &[0, 0, 0]);
     assert_eq!(chunk_out.get_data(), &chunk_data[..]);
 }
@@ -299,11 +284,7 @@ pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
         crate::compression::CompressionType::Raw(crate::compression::raw::RawCompression::default()),
     );
     let chunk_data: Vec<i32> = (0..125_i32).collect();
-    let chunk_in = crate::SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_shape.clone(),
-        smallvec![0, 0, 0],
-        &chunk_data,
-    );
+    let chunk_in = crate::SliceDataChunk::new(smallvec![0, 0, 0], &chunk_data);
 
     create
         .create_array("foo/bar", &array_meta)
@@ -326,11 +307,7 @@ pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
 
     // Shorten data (this still will not catch trailing data less than the length).
     let chunk_data: Vec<i32> = (0..10_i32).collect();
-    let chunk_in = crate::SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_shape.clone(),
-        smallvec![0, 0, 0],
-        &chunk_data,
-    );
+    let chunk_in = crate::SliceDataChunk::new(smallvec![0, 0, 0], &chunk_data);
     create
         .write_chunk("foo/bar", &array_meta, &chunk_in)
         .expect("Failed to write chunk");
@@ -357,11 +334,7 @@ pub(crate) fn delete_chunk<N: ZarrTestable>() {
 
     let array = "foo/bar";
     let chunk_data: Vec<i32> = (0..125_i32).collect();
-    let chunk_in = crate::SliceDataChunk::new(
-        array_meta.chunk_grid.chunk_shape.clone(),
-        coord_a.clone(),
-        &chunk_data,
-    );
+    let chunk_in = crate::SliceDataChunk::new(coord_a.clone(), &chunk_data);
 
     create
         .create_array(array, &array_meta)

@@ -35,11 +35,7 @@ where
     let rng = rand::thread_rng();
     let chunk_data: Vec<T> = rng.sample_iter(&Standard).take(numel).collect();
 
-    let chunk_in = VecDataChunk::new(
-        array_meta.get_chunk_shape().into(),
-        smallvec![0, 0, 0],
-        chunk_data.clone(),
-    );
+    let chunk_in = VecDataChunk::new(smallvec![0, 0, 0], chunk_data.clone());
 
     let mut inner: Vec<u8> = Vec::new();
 
