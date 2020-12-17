@@ -38,7 +38,10 @@ fn doc_spec_array_attributes(compression: compression::CompressionType) -> Array
     ArrayMetadata::new(
         smallvec![5, 6, 7],
         smallvec![1, 2, 3],
-        DataType::INT16,
+        DataType::Int {
+            size: IntSize::B2,
+            endian: Endian::Big,
+        },
         compression,
     )
 }
@@ -81,7 +84,7 @@ pub(crate) fn test_chunk_compression_rw(compression: compression::CompressionTyp
     let array_meta = ArrayMetadata::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
-        DataType::INT32,
+        i32::ZARR_TYPE,
         compression,
     );
     let chunk_data: Vec<i32> = (0..125_i32).collect();
@@ -116,7 +119,7 @@ pub(crate) fn test_varlength_chunk_rw(compression: compression::CompressionType)
     let array_meta = ArrayMetadata::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
-        DataType::INT32,
+        i32::ZARR_TYPE,
         compression,
     );
     let chunk_data: Vec<i32> = (0..100_i32).collect();
@@ -170,7 +173,7 @@ pub(crate) fn create_array<N: ZarrTestable>() {
     let array_meta = ArrayMetadata::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
-        DataType::INT32,
+        i32::ZARR_TYPE,
         crate::compression::CompressionType::Raw(crate::compression::raw::RawCompression::default()),
     );
     create
@@ -188,7 +191,7 @@ pub(crate) fn absolute_relative_paths<N: ZarrTestable>() -> Result<()> {
     let array_meta = ArrayMetadata::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
-        DataType::INT32,
+        i32::ZARR_TYPE,
         crate::compression::CompressionType::Raw(crate::compression::raw::RawCompression::default()),
     );
     create
@@ -292,7 +295,7 @@ pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
     let array_meta = ArrayMetadata::new(
         smallvec![10, 10, 10],
         smallvec![5, 5, 5],
-        DataType::INT32,
+        i32::ZARR_TYPE,
         crate::compression::CompressionType::Raw(crate::compression::raw::RawCompression::default()),
     );
     let chunk_data: Vec<i32> = (0..125_i32).collect();
@@ -345,7 +348,7 @@ pub(crate) fn delete_chunk<N: ZarrTestable>() {
     let array_meta = ArrayMetadata::new(
         smallvec![10, 100, 100],
         smallvec![5, 5, 5],
-        DataType::INT32,
+        i32::ZARR_TYPE,
         crate::compression::CompressionType::Raw(crate::compression::raw::RawCompression::default()),
     );
 

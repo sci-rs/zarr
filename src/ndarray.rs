@@ -500,7 +500,7 @@ impl<T: Iterator<Item = Vec<u64>>> ExactSizeIterator for CoordIterator<T> {}
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::DataType;
+    use crate::data_type::ReflectedType;
 
     #[test]
     fn test_array_attributes_coord_iter() {
@@ -509,7 +509,7 @@ pub(crate) mod tests {
         let array_meta = ArrayMetadata::new(
             smallvec![1, 4, 5],
             smallvec![1, 2, 3],
-            DataType::INT16,
+            i16::ZARR_TYPE,
             crate::compression::CompressionType::default(),
         );
 

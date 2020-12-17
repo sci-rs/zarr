@@ -319,6 +319,7 @@ mod tests {
     };
     use crate::{
         chunk::DataChunk,
+        data_type::ReflectedType,
         ArrayMetadata,
         HierarchyWriter,
     };
@@ -397,7 +398,7 @@ mod tests {
         let array_meta = ArrayMetadata::new(
             smallvec![10, 10, 10],
             smallvec![5, 5, 5],
-            crate::DataType::INT32,
+            i32::ZARR_TYPE,
             crate::compression::CompressionType::Raw(
                 crate::compression::raw::RawCompression::default(),
             ),
@@ -419,7 +420,7 @@ mod tests {
         let array_meta = ArrayMetadata::new(
             smallvec![10, 10, 10],
             smallvec![5, 5, 5],
-            crate::DataType::INT32,
+            i32::ZARR_TYPE,
             crate::compression::CompressionType::Raw(
                 crate::compression::raw::RawCompression::default(),
             ),
@@ -440,7 +441,7 @@ mod tests {
         let array_meta = ArrayMetadata::new(
             smallvec![10, 10, 10],
             smallvec![5, 5, 5],
-            crate::DataType::INT32,
+            i32::ZARR_TYPE,
             crate::compression::CompressionType::Raw(
                 crate::compression::raw::RawCompression::default(),
             ),

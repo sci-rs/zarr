@@ -407,7 +407,7 @@ impl ArrayMetadata {
     /// let attrs = ArrayMetadata::new(
     ///     smallvec![50, 40, 30],
     ///     smallvec![11, 10, 10],
-    ///     DataType::UINT8,
+    ///     i8::ZARR_TYPE,
     ///     zarr::compression::CompressionType::default(),
     /// );
     /// assert_eq!(attrs.get_num_chunks(), 60);
@@ -423,7 +423,7 @@ impl ArrayMetadata {
     /// let attrs = ArrayMetadata::new(
     ///     smallvec![50, 40, 30],
     ///     smallvec![11, 10, 10],
-    ///     DataType::UINT8,
+    ///     i8::ZARR_TYPE,
     ///     zarr::compression::CompressionType::default(),
     /// );
     /// assert!(attrs.in_bounds(&smallvec![4, 3, 2]));

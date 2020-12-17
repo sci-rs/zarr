@@ -21,7 +21,7 @@ fn test_read_ndarray() {
     let array_meta = ArrayMetadata::new(
         smallvec![3, 300, 200, 100],
         chunk_shape.clone(),
-        i32::VARIANT,
+        i32::ZARR_TYPE,
         CompressionType::default(),
     );
     let numel = array_meta.get_chunk_num_elements();
@@ -111,7 +111,7 @@ fn test_read_ndarray_oob() {
     let array_meta = ArrayMetadata::new(
         smallvec![100, 200],
         chunk_shape.clone(),
-        i32::VARIANT,
+        i32::ZARR_TYPE,
         CompressionType::default(),
     );
 
@@ -141,7 +141,7 @@ fn test_write_read_ndarray() {
     let array_meta = ArrayMetadata::new(
         smallvec![3, 300, 200, 100],
         chunk_shape.clone(),
-        i32::VARIANT,
+        i32::ZARR_TYPE,
         CompressionType::default(),
     );
 

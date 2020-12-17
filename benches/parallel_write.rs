@@ -74,7 +74,7 @@ where
     let array_meta = ArrayMetadata::new(
         smallvec![u64::from(CHUNK_DIM) * N_CHUNKS; 3],
         chunk_shape.clone(),
-        T::VARIANT,
+        T::ZARR_TYPE,
         compression.clone(),
     );
 

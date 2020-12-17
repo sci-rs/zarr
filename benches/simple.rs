@@ -28,7 +28,7 @@ where
     let array_meta = ArrayMetadata::new(
         smallvec![1024, 1024, 1024],
         smallvec![64, 64, 64],
-        T::VARIANT,
+        T::ZARR_TYPE,
         compression,
     );
     let numel = array_meta.get_chunk_num_elements();

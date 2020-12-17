@@ -19,7 +19,7 @@ fn test_read_write<T, Zarr: HierarchyReader + HierarchyWriter>(
     let array_meta = ArrayMetadata::new(
         (1..=dim as u64).map(|d| d * 100).collect(),
         chunk_shape.clone(),
-        T::VARIANT,
+        T::ZARR_TYPE,
         compression.clone(),
     );
     let numel = array_meta.get_chunk_num_elements();

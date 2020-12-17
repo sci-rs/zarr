@@ -64,7 +64,7 @@ pub trait WriteableStore {
 /// let meta = ArrayMetadata::new(
 ///     smallvec![50, 40, 30],
 ///     smallvec![11, 10, 10],
-///     DataType::UINT8,
+///     i8::ZARR_TYPE,
 ///     zarr::compression::CompressionType::default(),
 /// );
 /// assert_eq!(get_chunk_key("/foo/baz", &meta, &[0, 0, 0]), "/data/root/foo/baz/c0/0/0");
@@ -73,7 +73,7 @@ pub trait WriteableStore {
 /// let meta = ArrayMetadata::new(
 ///     smallvec![],
 ///     smallvec![],
-///     DataType::UINT8,
+///     i8::ZARR_TYPE,
 ///     zarr::compression::CompressionType::default(),
 /// );
 /// assert_eq!(get_chunk_key("/foo/baz", &meta, &[]), "/data/root/foo/baz/c");
