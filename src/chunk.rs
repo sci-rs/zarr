@@ -1,3 +1,7 @@
+use std::io::{
+    Error,
+    ErrorKind,
+};
 use std::marker::PhantomData;
 
 use byteorder::{
@@ -285,13 +289,16 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read> {
     where
         VecDataChunk<T>: DataChunk<T> + ReadableDataChunk,
     {
-        // TODO: This will fail because the reflected type is in native endian.
-        // if array_meta.data_type != T::ZARR_TYPE {
-        //     return Err(Error::new(
-        //         ErrorKind::InvalidInput,
-        //         "Attempt to create data chunk for wrong type.",
-        //     ));
-        // }
+        if !array_meta
+            .data_type
+            .effective_type()?
+            .eq_modulo_endian(&T::ZARR_TYPE)
+        {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Attempt to create data chunk for wrong type.",
+            ));
+        }
 
         let mut chunk =
             T::create_data_chunk(&grid_position, array_meta.get_chunk_num_elements() as u32);
@@ -307,13 +314,16 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read> {
         grid_position: GridCoord,
         chunk: &mut B,
     ) -> std::io::Result<()> {
-        // TODO: This will fail because the reflected type is in native endian.
-        // if array_meta.data_type != T::ZARR_TYPE {
-        //     return Err(Error::new(
-        //         ErrorKind::InvalidInput,
-        //         "Attempt to create data chunk for wrong type.",
-        //     ));
-        // }
+        if !array_meta
+            .data_type
+            .effective_type()?
+            .eq_modulo_endian(&T::ZARR_TYPE)
+        {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Attempt to create data chunk for wrong type.",
+            ));
+        }
 
         chunk.reinitialize(&grid_position, array_meta.get_chunk_num_elements() as u32);
         let mut decompressed = array_meta.compressor.decoder(buffer);
@@ -331,13 +341,16 @@ pub trait DefaultChunkWriter<
 >
 {
     fn write_chunk(buffer: W, array_meta: &ArrayMetadata, chunk: &B) -> std::io::Result<()> {
-        // TODO: This will fail because the reflected type is in native endian.
-        // if array_meta.data_type != T::ZARR_TYPE {
-        //     return Err(Error::new(
-        //         ErrorKind::InvalidInput,
-        //         "Attempt to write data chunk for wrong type.",
-        //     ));
-        // }
+        if !array_meta
+            .data_type
+            .effective_type()?
+            .eq_modulo_endian(&T::ZARR_TYPE)
+        {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Attempt to write data chunk for wrong type.",
+            ));
+        }
 
         let mut compressor = array_meta.compressor.encoder(buffer);
         chunk.write_data(&mut compressor, array_meta)?;

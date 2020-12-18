@@ -430,6 +430,17 @@ impl DataType {
             _ => NATIVE_ENDIAN,
         }
     }
+
+    pub(crate) fn eq_modulo_endian(&self, other: &Self) -> bool {
+        match (self, other) {
+            (DataType::Bool, DataType::Bool) => true,
+            (DataType::Int { size: s1, .. }, DataType::Int { size: s2, .. }) => s1 == s2,
+            (DataType::UInt { size: s1, .. }, DataType::UInt { size: s2, .. }) => s1 == s2,
+            (DataType::Float { size: s1, .. }, DataType::Float { size: s2, .. }) => s1 == s2,
+            (DataType::Raw { size: s1 }, DataType::Raw { size: s2 }) => s1 == s2,
+            _ => false,
+        }
+    }
 }
 
 impl std::fmt::Display for DataType {
