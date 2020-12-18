@@ -373,6 +373,8 @@ pub struct ArrayMetadata {
     attributes: JsonObject,
     /// TODO
     extensions: Vec<ExtensionMetadata>,
+    /// TODO
+    fill_value: Option<Value>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -406,6 +408,7 @@ impl ArrayMetadata {
             },
             attributes: JsonObject::new(),
             extensions: vec![],
+            fill_value: None,
         }
     }
 

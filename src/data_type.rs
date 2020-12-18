@@ -451,7 +451,10 @@ impl std::fmt::Display for DataType {
 /// The supertraits are not necessary for this trait, but are used to
 /// remove redundant bounds elsewhere when operating generically over
 /// data types.
-pub trait ReflectedType: Send + Sync + Clone + Default + 'static {
+// `DeserializedOwned` is necessary for deserialization of metadata `fill_value`.
+pub trait ReflectedType:
+    Send + Sync + Clone + Default + serde::de::DeserializeOwned + 'static
+{
     const ZARR_TYPE: DataType;
 
     fn create_data_chunk(grid_position: &GridCoord, num_el: u32) -> VecDataChunk<Self> {
