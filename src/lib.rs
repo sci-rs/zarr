@@ -241,7 +241,7 @@ pub trait HierarchyWriter: HierarchyReader {
     ) -> Result<(), Error>;
 
     /// Set mandatory array attributes.
-    fn set_array_attributes(
+    fn set_array_metadata(
         &self,
         path_name: &str,
         array_meta: &ArrayMetadata,

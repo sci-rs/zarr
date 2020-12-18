@@ -508,7 +508,7 @@ pub(crate) mod tests {
     use crate::data_type::ReflectedType;
 
     #[test]
-    fn test_array_attributes_coord_iter() {
+    fn test_array_metadata_coord_iter() {
         use std::collections::HashSet;
 
         let array_meta = ArrayMetadata::new(

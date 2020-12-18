@@ -34,7 +34,7 @@ impl<C, N: HierarchyReader + HierarchyWriter> AsRef<N> for ContextWrapper<C, N> 
     }
 }
 
-fn doc_spec_array_attributes(compression: compression::CompressionType) -> ArrayMetadata {
+fn doc_spec_array_metadata(compression: compression::CompressionType) -> ArrayMetadata {
     ArrayMetadata::new(
         smallvec![5, 6, 7],
         smallvec![1, 2, 3],
@@ -48,7 +48,7 @@ fn doc_spec_array_attributes(compression: compression::CompressionType) -> Array
 
 pub(crate) fn test_read_doc_spec_chunk(chunk: &[u8], compression: compression::CompressionType) {
     let buff = Cursor::new(chunk);
-    let array_meta = doc_spec_array_attributes(compression);
+    let array_meta = doc_spec_array_metadata(compression);
 
     let chunk = <DefaultChunk as DefaultChunkReader<i16, std::io::Cursor<&[u8]>>>::read_chunk(
         buff,
@@ -65,7 +65,7 @@ pub(crate) fn test_write_doc_spec_chunk(
     expected_chunk: &[u8],
     compression: compression::CompressionType,
 ) {
-    let array_meta = doc_spec_array_attributes(compression);
+    let array_meta = doc_spec_array_metadata(compression);
     let chunk_in = SliceDataChunk::new(smallvec![0, 0, 0], DOC_SPEC_CHUNK_DATA);
     let mut buff: Vec<u8> = Vec::new();
 
