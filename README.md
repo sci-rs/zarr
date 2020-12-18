@@ -1,6 +1,6 @@
 # Zarr [![Build Status](https://travis-ci.org/sci-rs/zarr.svg?branch=main)](https://travis-ci.org/sci-rs/zarr) [![Coverage](https://codecov.io/gh/sci-rs/zarr/branch/main/graph/badge.svg)](https://codecov.io/gh/sci-rs/zarr)
 
-TODO
+A pure rust implementation of [version 3.0-dev of the Zarr core protocol for storage and retrieval of N-dimensional typed arrays](https://zarr-specs.readthedocs.io/en/core-protocol-v3.0-dev/protocol/core/v3.0.html).
 
 ## Minimum supported Rust version (MSRV)
 
