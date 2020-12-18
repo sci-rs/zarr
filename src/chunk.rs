@@ -1,7 +1,9 @@
 use std::io::{
     Error,
     ErrorKind,
+    Read,
     Result,
+    Write,
 };
 use std::marker::PhantomData;
 
@@ -38,13 +40,13 @@ pub trait ReadableDataChunk {
     ///
     /// Read the stream directly into the chunk data instead
     /// of creating a copied byte buffer.
-    fn read_data<R: std::io::Read>(&mut self, source: R, array_meta: &ArrayMetadata) -> Result<()>;
+    fn read_data<R: Read>(&mut self, source: R, array_meta: &ArrayMetadata) -> Result<()>;
 }
 
 /// Traits for data chunks that can write out data.
 pub trait WriteableDataChunk {
     /// Write the data from this chunk into a target.
-    fn write_data<W: std::io::Write>(&self, target: W, array_meta: &ArrayMetadata) -> Result<()>;
+    fn write_data<W: Write>(&self, target: W, array_meta: &ArrayMetadata) -> Result<()>;
 }
 
 /// Common interface for data chunks of element (rust) type `T`.
@@ -101,7 +103,7 @@ impl<T: ReflectedType> ReinitDataChunk<T> for VecDataChunk<T> {
 macro_rules! vec_data_chunk_impl {
     ($ty_name:ty, $bo_read_fn:ident, $bo_write_fn:ident) => {
         impl<C: AsMut<[$ty_name]>> ReadableDataChunk for SliceDataChunk<$ty_name, C> {
-            fn read_data<R: std::io::Read>(
+            fn read_data<R: Read>(
                 &mut self,
                 mut source: R,
                 array_meta: &ArrayMetadata,
@@ -114,7 +116,7 @@ macro_rules! vec_data_chunk_impl {
         }
 
         impl<C: AsRef<[$ty_name]>> WriteableDataChunk for SliceDataChunk<$ty_name, C> {
-            fn write_data<W: std::io::Write>(
+            fn write_data<W: Write>(
                 &self,
                 mut target: W,
                 array_meta: &ArrayMetadata,
@@ -159,31 +161,19 @@ vec_data_chunk_impl!(f32, read_f32_into, write_f32_into);
 vec_data_chunk_impl!(f64, read_f64_into, write_f64_into);
 
 impl<C: AsMut<[u8]>> ReadableDataChunk for SliceDataChunk<u8, C> {
-    fn read_data<R: std::io::Read>(
-        &mut self,
-        mut source: R,
-        _array_meta: &ArrayMetadata,
-    ) -> Result<()> {
+    fn read_data<R: Read>(&mut self, mut source: R, _array_meta: &ArrayMetadata) -> Result<()> {
         source.read_exact(self.data.as_mut())
     }
 }
 
 impl<C: AsRef<[u8]>> WriteableDataChunk for SliceDataChunk<u8, C> {
-    fn write_data<W: std::io::Write>(
-        &self,
-        mut target: W,
-        _array_meta: &ArrayMetadata,
-    ) -> Result<()> {
+    fn write_data<W: Write>(&self, mut target: W, _array_meta: &ArrayMetadata) -> Result<()> {
         target.write_all(self.data.as_ref())
     }
 }
 
 impl<C: AsMut<[bool]>> ReadableDataChunk for SliceDataChunk<bool, C> {
-    fn read_data<R: std::io::Read>(
-        &mut self,
-        mut source: R,
-        _array_meta: &ArrayMetadata,
-    ) -> Result<()> {
+    fn read_data<R: Read>(&mut self, mut source: R, _array_meta: &ArrayMetadata) -> Result<()> {
         const CHUNK: usize = 256;
         let mut buf: [u8; CHUNK] = [0; CHUNK];
 
@@ -200,11 +190,7 @@ impl<C: AsMut<[bool]>> ReadableDataChunk for SliceDataChunk<bool, C> {
 }
 
 impl<C: AsRef<[bool]>> WriteableDataChunk for SliceDataChunk<bool, C> {
-    fn write_data<W: std::io::Write>(
-        &self,
-        mut target: W,
-        _array_meta: &ArrayMetadata,
-    ) -> Result<()> {
+    fn write_data<W: Write>(&self, mut target: W, _array_meta: &ArrayMetadata) -> Result<()> {
         const CHUNK: usize = 256;
         let mut buf: [u8; CHUNK] = [0; CHUNK];
 
@@ -220,11 +206,7 @@ impl<C: AsRef<[bool]>> WriteableDataChunk for SliceDataChunk<bool, C> {
 }
 
 impl<C: AsMut<[f16]>> ReadableDataChunk for SliceDataChunk<f16, C> {
-    fn read_data<R: std::io::Read>(
-        &mut self,
-        mut source: R,
-        array_meta: &ArrayMetadata,
-    ) -> Result<()> {
+    fn read_data<R: Read>(&mut self, mut source: R, array_meta: &ArrayMetadata) -> Result<()> {
         // TODO: no chunking
         let endian = array_meta.data_type.effective_type()?.endian();
         for n in self.data.as_mut() {
@@ -240,11 +222,7 @@ impl<C: AsMut<[f16]>> ReadableDataChunk for SliceDataChunk<f16, C> {
 }
 
 impl<C: AsRef<[f16]>> WriteableDataChunk for SliceDataChunk<f16, C> {
-    fn write_data<W: std::io::Write>(
-        &self,
-        mut target: W,
-        array_meta: &ArrayMetadata,
-    ) -> Result<()> {
+    fn write_data<W: Write>(&self, mut target: W, array_meta: &ArrayMetadata) -> Result<()> {
         // TODO: no chunking
         let endian = array_meta.data_type.effective_type()?.endian();
         for n in self.data.as_ref() {
@@ -288,7 +266,7 @@ fn check_array_type<T: ReflectedType>(array_meta: &ArrayMetadata) -> Result<()> 
 }
 
 /// Reads chunks from rust readers.
-pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read> {
+pub trait DefaultChunkReader<T: ReflectedType, R: Read> {
     fn read_chunk(
         buffer: R,
         array_meta: &ArrayMetadata,
@@ -324,12 +302,7 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read> {
 }
 
 /// Writes chunks to rust writers.
-pub trait DefaultChunkWriter<
-    T: ReflectedType,
-    W: std::io::Write,
-    B: DataChunk<T> + WriteableDataChunk,
->
-{
+pub trait DefaultChunkWriter<T: ReflectedType, W: Write, B: DataChunk<T> + WriteableDataChunk> {
     fn write_chunk(buffer: W, array_meta: &ArrayMetadata, chunk: &B) -> Result<()> {
         check_array_type::<T>(array_meta)?;
 
@@ -345,8 +318,8 @@ pub trait DefaultChunkWriter<
 // `DefaultChunkReader`, etc.
 #[derive(Debug)]
 pub struct DefaultChunk;
-impl<T: ReflectedType, R: std::io::Read> DefaultChunkReader<T, R> for DefaultChunk {}
-impl<T: ReflectedType, W: std::io::Write, B: DataChunk<T> + WriteableDataChunk>
-    DefaultChunkWriter<T, W, B> for DefaultChunk
+impl<T: ReflectedType, R: Read> DefaultChunkReader<T, R> for DefaultChunk {}
+impl<T: ReflectedType, W: Write, B: DataChunk<T> + WriteableDataChunk> DefaultChunkWriter<T, W, B>
+    for DefaultChunk
 {
 }

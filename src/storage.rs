@@ -139,7 +139,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
     fn get_array_metadata(&self, path_name: &str) -> Result<ArrayMetadata, Error> {
         let array_path = self.array_metadata_key(path_name);
         let value_reader = ReadableStore::get(self, &array_path.to_str().expect("TODO"))?
-            .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;
+            .ok_or_else(|| Error::from(ErrorKind::NotFound))?;
         let metadata: ArrayMetadata = serde_json::from_reader(value_reader)?;
         // TODO: erring immediately when encountering unknown extensions, while
         // it may be more appropriate to do so only when doing chunk IO.
@@ -258,7 +258,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
                 self.group_metadata_key(path_name)
             } else {
                 return Err(Error::new(
-                    std::io::ErrorKind::NotFound,
+                    ErrorKind::NotFound,
                     "Node does not exist at path",
                 ));
             };
@@ -266,7 +266,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
         // TODO: determine proper missing behavior for implicit groups.
         // For now return an error.
         let value_reader = ReadableStore::get(self, &metadata_key.to_str().expect("TODO"))?
-            .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;
+            .ok_or_else(|| Error::from(ErrorKind::NotFound))?;
         let mut value: serde_json::Value = serde_json::from_reader(value_reader)?;
         let attrs = match value
             .as_object_mut()
@@ -294,14 +294,14 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
                 self.group_metadata_key(path_name)
             } else {
                 return Err(Error::new(
-                    std::io::ErrorKind::NotFound,
+                    ErrorKind::NotFound,
                     "Node does not exist at path",
                 ));
             };
 
         // TODO: race condition
         let value_reader = ReadableStore::get(self, &metadata_key.to_str().expect("TODO"))?
-            .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;
+            .ok_or_else(|| Error::from(ErrorKind::NotFound))?;
         let existing: JsonObject = serde_json::from_reader(value_reader)?;
 
         // TODO: determine whether attribute merging is still necessary for zarr
@@ -330,7 +330,7 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
         let metadata_key = self.group_metadata_key(path_name);
         if self.exists(self.array_metadata_key(path_name).to_str().expect("TODO"))? {
             Err(Error::new(
-                std::io::ErrorKind::AlreadyExists,
+                ErrorKind::AlreadyExists,
                 "Array already exists at group path",
             ))
         } else if self.exists(metadata_key.to_str().expect("TODO"))? {
@@ -354,7 +354,7 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
             || self.exists(metadata_key.to_str().expect("TODO"))?
         {
             Err(Error::new(
-                std::io::ErrorKind::AlreadyExists,
+                ErrorKind::AlreadyExists,
                 "Node already exists at array path",
             ))
         } else {
