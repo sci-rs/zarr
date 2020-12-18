@@ -187,7 +187,7 @@ impl<'de> serde::de::Visitor<'de> for DataTypeVisitor {
                 size: IntSize::B1,
                 endian: Endian::Little,
             },
-            dtype @ _ if dtype.chars().nth(0) == Some('r') => {
+            dtype if dtype.starts_with('r') => {
                 if let Ok(size) = dtype[1..].parse::<usize>() {
                     if size % 8 == 0 {
                         DataType::Raw { size }
@@ -205,19 +205,20 @@ impl<'de> serde::de::Visitor<'de> for DataTypeVisitor {
                     ));
                 }
             }
-            dtype @ _ if dtype.len() == 3 => {
-                let endian = Endian::deserial_char(dtype.chars().nth(0).unwrap()).expect("TODO");
-                match dtype.chars().nth(1).unwrap() {
+            dtype if dtype.len() == 3 => {
+                let mut chars = dtype.chars();
+                let endian = Endian::deserial_char(chars.next().unwrap()).expect("TODO");
+                match chars.next().unwrap() {
                     'i' => {
-                        let size = IntSize::deserial_char(dtype.chars().nth(2).unwrap()).unwrap();
+                        let size = IntSize::deserial_char(chars.next().unwrap()).unwrap();
                         DataType::Int { size, endian }
                     }
                     'u' => {
-                        let size = IntSize::deserial_char(dtype.chars().nth(2).unwrap()).unwrap();
+                        let size = IntSize::deserial_char(chars.next().unwrap()).unwrap();
                         DataType::UInt { size, endian }
                     }
                     'f' => {
-                        let size = FloatSize::deserial_char(dtype.chars().nth(2).unwrap()).unwrap();
+                        let size = FloatSize::deserial_char(chars.next().unwrap()).unwrap();
                         DataType::Float { size, endian }
                     }
                     _ => {
