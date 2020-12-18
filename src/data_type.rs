@@ -229,13 +229,6 @@ impl<'de> serde::de::Visitor<'de> for DataTypeVisitor {
                     }
                 }
             }
-            // [end @ '<' | '>', num @ 'i' | 'u' | 'f', byte @ '1' ... '8'] => {
-            //     match
-            // }
-            // "<f8" => DataType::Float {
-            //     size: FloatSize::B8,
-            //     endian: Endian::Little,
-            // },
             _ => {
                 return Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Str(value),
