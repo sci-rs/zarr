@@ -3,10 +3,7 @@
 #![deny(missing_debug_implementations)]
 #![forbid(unsafe_code)]
 
-// TODO: this does not run the test for recent stable rust because `test`
-// is no longer set during doc tests. When 1.40 stabilizes and is the MSRV
-// this can be changed from `test` to `doctest` and will work correctly.
-#[cfg(all(test, feature = "filesystem"))]
+#[cfg(all(doctest, feature = "filesystem"))]
 doc_comment::doctest!("../README.md");
 
 #[macro_use]
@@ -241,11 +238,7 @@ pub trait HierarchyWriter: HierarchyReader {
     ) -> Result<(), Error>;
 
     /// Set mandatory array attributes.
-    fn set_array_metadata(
-        &self,
-        path_name: &str,
-        array_meta: &ArrayMetadata,
-    ) -> Result<(), Error> {
+    fn set_array_metadata(&self, path_name: &str, array_meta: &ArrayMetadata) -> Result<(), Error> {
         if let serde_json::Value::Object(map) = serde_json::to_value(array_meta)? {
             self.set_attributes(path_name, map)
         } else {

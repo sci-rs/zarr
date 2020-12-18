@@ -4,7 +4,7 @@ TODO
 
 ## Minimum supported Rust version (MSRV)
 
-Stable 1.39
+Stable 1.40
 
 ## Quick start
 
@@ -23,14 +23,13 @@ fn zarr_roundtrip(root_path: &str) -> std::io::Result<()> {
     let chunk_shape = smallvec![44, 33, 22];
     let array_meta = ArrayMetadata::new(
         smallvec![100, 200, 300],
-        chunk_shape.clone(),
-        DataType::INT16,
+        chunk_shape,
+        i16::ZARR_TYPE,
         CompressionType::default(),
     );
     let chunk_data = vec![0i16; array_meta.get_chunk_num_elements()];
 
     let chunk_in = SliceDataChunk::new(
-        chunk_shape,
         smallvec![0, 0, 0],
         &chunk_data);
 
