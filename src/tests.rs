@@ -271,6 +271,27 @@ pub(crate) fn attributes_rw<N: ZarrTestable>() {
         .set_attributes(group, attrs_3.clone())
         .expect("Failed to set attributes");
     assert_eq!(create.list_attributes(group).unwrap(), attrs_3);
+
+    // Test attributes for arrays also.
+    let array = "baz";
+    let array_meta = ArrayMetadata::new(
+        smallvec![10, 10, 10],
+        smallvec![5, 5, 5],
+        i32::ZARR_TYPE,
+        crate::compression::CompressionType::Raw(crate::compression::raw::RawCompression::default()),
+    );
+    create
+        .create_array(array, &array_meta)
+        .expect("Failed to create array");
+
+    assert_eq!(
+        Value::Object(create.list_attributes(array).unwrap()),
+        json!({})
+    );
+    create
+        .set_attributes(array, attrs_1.clone())
+        .expect("Failed to set attributes");
+    assert_eq!(create.list_attributes(array).unwrap(), attrs_1);
 }
 
 pub(crate) fn create_chunk_rw<N: ZarrTestable>() {

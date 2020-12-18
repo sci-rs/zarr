@@ -296,7 +296,7 @@ impl Default for GroupMetadata {
     fn default() -> Self {
         GroupMetadata {
             extensions: Vec::new(),
-            attributes: serde_json::Map::new(),
+            attributes: JsonObject::new(),
         }
     }
 }
@@ -312,6 +312,8 @@ pub struct ArrayMetadata {
     compressor: compression::CompressionType,
     /// TODO
     chunk_grid: ChunkGridMetadata,
+    /// TODO
+    attributes: JsonObject,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -343,6 +345,7 @@ impl ArrayMetadata {
                 chunk_shape,
                 separator: "/".to_owned(),
             },
+            attributes: JsonObject::new(),
         }
     }
 
