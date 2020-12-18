@@ -177,8 +177,6 @@ impl<'de> serde::de::Visitor<'de> for DataTypeVisitor {
     where
         E: serde::de::Error,
     {
-        // type DataType = DataType;
-
         let dtype = match value {
             "bool" => DataType::Bool,
             "i1" => DataType::Int {

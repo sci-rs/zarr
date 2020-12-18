@@ -5,7 +5,6 @@ use byteorder::{
     ByteOrder,
     LittleEndian,
     ReadBytesExt,
-    WriteBytesExt,
 };
 use half::f16;
 
@@ -13,7 +12,6 @@ use crate::compression::Compression;
 use crate::{
     data_type::Endian,
     ArrayMetadata,
-    ChunkCoord,
     GridCoord,
     ReflectedType,
 };
@@ -280,7 +278,7 @@ impl<T: ReflectedType, C: AsRef<[T]>> DataChunk<T> for SliceDataChunk<T, C> {
 /// Reads chunks from rust readers.
 pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read> {
     fn read_chunk(
-        mut buffer: R,
+        buffer: R,
         array_meta: &ArrayMetadata,
         grid_position: GridCoord,
     ) -> std::io::Result<VecDataChunk<T>>
@@ -304,7 +302,7 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read> {
     }
 
     fn read_chunk_into<B: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk>(
-        mut buffer: R,
+        buffer: R,
         array_meta: &ArrayMetadata,
         grid_position: GridCoord,
         chunk: &mut B,
@@ -332,7 +330,7 @@ pub trait DefaultChunkWriter<
     B: DataChunk<T> + WriteableDataChunk,
 >
 {
-    fn write_chunk(mut buffer: W, array_meta: &ArrayMetadata, chunk: &B) -> std::io::Result<()> {
+    fn write_chunk(buffer: W, array_meta: &ArrayMetadata, chunk: &B) -> std::io::Result<()> {
         // TODO: This will fail because the reflected type is in native endian.
         // if array_meta.data_type != T::ZARR_TYPE {
         //     return Err(Error::new(
