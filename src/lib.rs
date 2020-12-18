@@ -365,16 +365,18 @@ pub struct ArrayMetadata {
     shape: GridCoord,
     /// Element data type.
     data_type: ExtensibleDataType,
-    /// Compression scheme for voxel data in each chunk.
-    compressor: compression::CompressionType,
     /// TODO
     chunk_grid: ChunkGridMetadata,
     /// TODO
-    attributes: JsonObject,
+    chunk_memory_layout: Order,
+    /// TODO
+    fill_value: Option<Value>,
     /// TODO
     extensions: Vec<ExtensionMetadata>,
     /// TODO
-    fill_value: Option<Value>,
+    attributes: JsonObject,
+    /// Compression scheme for voxel data in each chunk.
+    compressor: compression::CompressionType,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -383,6 +385,14 @@ pub struct ChunkGridMetadata {
     chunk_shape: ChunkCoord,
     /// TODO
     separator: String,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub enum Order {
+    #[serde(rename = "C")]
+    RowMajor,
+    #[serde(rename = "F")]
+    ColumnMajor,
 }
 
 impl ArrayMetadata {
@@ -400,15 +410,15 @@ impl ArrayMetadata {
         ArrayMetadata {
             shape,
             data_type: data_type.into(),
-            compressor,
-            // TODO
             chunk_grid: ChunkGridMetadata {
                 chunk_shape,
                 separator: "/".to_owned(),
             },
-            attributes: JsonObject::new(),
-            extensions: vec![],
+            chunk_memory_layout: Order::ColumnMajor,
             fill_value: None,
+            extensions: vec![],
+            attributes: JsonObject::new(),
+            compressor,
         }
     }
 
@@ -418,6 +428,10 @@ impl ArrayMetadata {
 
     pub fn get_chunk_shape(&self) -> &[u32] {
         &self.chunk_grid.chunk_shape
+    }
+
+    pub fn get_chunk_memory_layout(&self) -> &Order {
+        &self.chunk_memory_layout
     }
 
     pub fn get_data_type(&self) -> &ExtensibleDataType {

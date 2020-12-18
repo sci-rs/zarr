@@ -22,6 +22,7 @@ use crate::{
     GridCoord,
     HierarchyReader,
     HierarchyWriter,
+    Order,
     ReadableDataChunk,
     ReflectedType,
     ReinitDataChunk,
@@ -163,7 +164,11 @@ pub trait ZarrNdarrayReader: HierarchyReader {
         VecDataChunk<T>: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
         T: ReflectedType + num_traits::identities::Zero,
     {
-        let mut arr = Array::zeros(bbox.shape_ndarray_shape().f());
+        let chunk_shape = match array_meta.get_chunk_memory_layout() {
+            Order::ColumnMajor => bbox.shape_ndarray_shape().f(),
+            Order::RowMajor => bbox.shape_ndarray_shape()[..].into_shape(),
+        };
+        let mut arr = Array::zeros(chunk_shape);
 
         self.read_ndarray_into(path_name, array_meta, bbox, arr.view_mut())?;
 
@@ -259,10 +264,12 @@ pub trait ZarrNdarrayReader: HierarchyReader {
 
                 let chunk_slice = chunk_read_bb.to_ndarray_slice();
 
-                // Zarr arrays are stored f-order/column-major.
-                let chunk_data =
-                    ArrayView::from_shape(chunk_bb.shape_ndarray_shape().f(), chunk.get_data())
-                        .expect("TODO: chunk ndarray failed");
+                let chunk_shape = match array_meta.get_chunk_memory_layout() {
+                    Order::ColumnMajor => chunk_bb.shape_ndarray_shape().f(),
+                    Order::RowMajor => chunk_bb.shape_ndarray_shape()[..].into_shape(),
+                };
+                let chunk_data = ArrayView::from_shape(chunk_shape, chunk.get_data())
+                    .expect("TODO: chunk ndarray failed");
                 let chunk_view =
                     chunk_data.slice(SliceInfo::<_, IxDyn>::new(chunk_slice).unwrap().as_ref());
 
@@ -332,11 +339,12 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                 let (chunk_bb, mut chunk_array) = match chunk_opt {
                     Some(chunk) => {
                         let chunk_bb = chunk.get_bounds(array_meta);
-                        let chunk_array = Array::from_shape_vec(
-                            chunk_bb.shape_ndarray_shape().f(),
-                            chunk.into_data(),
-                        )
-                        .expect("TODO: chunk ndarray failed");
+                        let chunk_shape = match array_meta.get_chunk_memory_layout() {
+                            Order::ColumnMajor => chunk_bb.shape_ndarray_shape().f(),
+                            Order::RowMajor => chunk_bb.shape_ndarray_shape()[..].into_shape(),
+                        };
+                        let chunk_array = Array::from_shape_vec(chunk_shape, chunk.into_data())
+                            .expect("TODO: chunk ndarray failed");
                         (chunk_bb, chunk_array)
                     }
                     None => {
