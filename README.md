@@ -47,6 +47,7 @@ fn zarr_roundtrip(root_path: &str) -> std::io::Result<()> {
 
 fn main() {
     zarr_roundtrip("tmp.zarr").expect("Zarr roundtrip failed!");
+    std::fs::remove_dir_all("tmp.zarr").expect("Failed to delete temporary zarr hierarchy");
 }
 ```
 

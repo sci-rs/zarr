@@ -140,7 +140,18 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
         let array_path = self.array_metadata_key(path_name);
         let value_reader = ReadableStore::get(self, &array_path.to_str().expect("TODO"))?
             .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;
-        Ok(serde_json::from_reader(value_reader)?)
+        let metadata: ArrayMetadata = serde_json::from_reader(value_reader)?;
+        // TODO: erring immediately when encountering unknown extensions, while
+        // it may be more appropriate to do so only when doing chunk IO.
+        if let Some(ext) = metadata.extensions.iter().find(|e| e.must_understand) {
+            // TODO: returning an io::Error wrapped custom error, rather than other
+            // way around.
+            return Err(Error::new(
+                ErrorKind::Other,
+                MetadataError::UnknownRequiredExtension(ext.clone()),
+            ));
+        }
+        Ok(metadata)
     }
 
     fn exists(&self, path_name: &str) -> Result<bool, Error> {

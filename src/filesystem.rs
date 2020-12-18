@@ -30,6 +30,7 @@ use crate::{
     Hierarchy,
     HierarchyLister,
     HierarchyReader,
+    MetadataError,
 };
 
 /// A filesystem-backed Zarr hierarchy.
@@ -49,7 +50,16 @@ impl FilesystemHierarchy {
     fn read_entry_point_metadata(base_path: &PathBuf) -> Result<EntryPointMetadata> {
         let entry_point_path = base_path.join(crate::ENTRY_POINT_KEY);
         let reader = BufReader::new(File::open(entry_point_path)?);
-        Ok(serde_json::from_reader(reader)?)
+        let metadata: EntryPointMetadata = serde_json::from_reader(reader)?;
+        if let Some(ext) = metadata.extensions.iter().find(|e| e.must_understand) {
+            // TODO: returning an io::Error wrapped custom error, rather than other
+            // way around.
+            return Err(Error::new(
+                ErrorKind::Other,
+                MetadataError::UnknownRequiredExtension(ext.clone()),
+            ));
+        }
+        Ok(metadata)
     }
 
     /// Open an existing Zarr hierarchy by path.

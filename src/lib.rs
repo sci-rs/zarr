@@ -92,6 +92,8 @@ type JsonObject = serde_json::Map<String, serde_json::Value>;
 pub enum MetadataError {
     #[error("value was not of the expected type: {0}")]
     UnexpectedType(serde_json::Value),
+    #[error("Encountered an unknown extension that must be understood: {}", .0.extension)]
+    UnknownRequiredExtension(ExtensionMetadata),
 }
 
 /// Store metadata about a node.
@@ -107,12 +109,54 @@ pub struct StoreNodeMetadata {
     pub size: Option<u64>,
 }
 
+/// TODO
+///
+/// ```
+/// use zarr::ExtensionMetadata;
+/// use serde_json;
+///
+/// let example_1: ExtensionMetadata = serde_json::from_str(r#"
+///     {
+///        "extension": "http://example.org/zarr/extension/foo",
+///        "must_understand": false,
+///        "configuration": {
+///            "foo": "bar"
+///        }
+///     }"#).unwrap();
+/// let ext_1 = ExtensionMetadata {
+///     extension: "http://example.org/zarr/extension/foo".to_owned(),
+///     must_understand: false,
+///     configuration: Some(serde_json::json!({"foo": "bar"}).as_object().unwrap().clone()),
+/// };
+/// assert_eq!(example_1, ext_1);
+///
+/// let example_2: ExtensionMetadata = serde_json::from_str(r#"
+///     {
+///        "extension": "http://example.org/zarr/extension/foo",
+///        "must_understand": false
+///     }"#).unwrap();
+/// let ext_2 = ExtensionMetadata {
+///     extension: "http://example.org/zarr/extension/foo".to_owned(),
+///     must_understand: false,
+///     configuration: None,
+/// };
+/// assert_eq!(example_2, ext_2);
+/// ```
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ExtensionMetadata {
+    pub extension: String,
+    pub must_understand: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub configuration: Option<JsonObject>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EntryPointMetadata {
     zarr_format: String,
     metadata_encoding: String,
     metadata_key_suffix: String,
-    // TODO: extensions
+    // TODO
+    extensions: Vec<ExtensionMetadata>,
 }
 
 impl Default for EntryPointMetadata {
@@ -121,6 +165,7 @@ impl Default for EntryPointMetadata {
             zarr_format: "https://purl.org/zarr/spec/protocol/core/3.0".to_owned(),
             metadata_encoding: "https://purl.org/zarr/spec/protocol/core/3.0".to_owned(),
             metadata_key_suffix: ".json".to_owned(),
+            extensions: vec![],
         }
     }
 }
@@ -314,6 +359,8 @@ pub struct ArrayMetadata {
     chunk_grid: ChunkGridMetadata,
     /// TODO
     attributes: JsonObject,
+    /// TODO
+    extensions: Vec<ExtensionMetadata>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -346,6 +393,7 @@ impl ArrayMetadata {
                 separator: "/".to_owned(),
             },
             attributes: JsonObject::new(),
+            extensions: vec![],
         }
     }
 
