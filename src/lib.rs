@@ -19,6 +19,7 @@ use serde::{
 };
 use serde_json::Value;
 use smallvec::SmallVec;
+use thiserror::Error;
 
 use crate::chunk::{
     DataChunk,
@@ -82,6 +83,16 @@ const DATA_ROOT_PATH: &str = "/data/root";
 const META_ROOT_PATH: &str = "/meta/root";
 const ARRAY_METADATA_KEY_EXT: &str = "array";
 const GROUP_METADATA_KEY_EXT: &str = "group";
+
+// Work around lack of Rust enum variant types (#2593) for `Value::Object(..)`
+// to still provide guarantee of correct type for attributes.
+type JsonObject = serde_json::Map<String, serde_json::Value>;
+
+#[derive(Error, Debug)]
+pub enum MetadataError {
+    #[error("value was not of the expected type: {0}")]
+    UnexpectedType(serde_json::Value),
+}
 
 /// Store metadata about a node.
 ///
@@ -203,8 +214,8 @@ pub trait HierarchyReader: Hierarchy {
         grid_position: &[u64],
     ) -> Result<Option<StoreNodeMetadata>, Error>;
 
-    /// List all attributes of a group.
-    fn list_attributes(&self, path_name: &str) -> Result<serde_json::Value, Error>;
+    /// List all attributes of a group or array.
+    fn list_attributes(&self, path_name: &str) -> Result<JsonObject, Error>;
 }
 
 /// Non-mutating operations on Zarr hierarchys that support group discoverability.
@@ -230,21 +241,9 @@ pub trait HierarchyWriter: HierarchyReader {
         )
     }
 
-    /// Set a map of attributes.
-    fn set_attributes(
-        &self,
-        path_name: &str,
-        attributes: serde_json::Map<String, serde_json::Value>,
-    ) -> Result<(), Error>;
-
-    /// Set mandatory array attributes.
-    fn set_array_metadata(&self, path_name: &str, array_meta: &ArrayMetadata) -> Result<(), Error> {
-        if let serde_json::Value::Object(map) = serde_json::to_value(array_meta)? {
-            self.set_attributes(path_name, map)
-        } else {
-            panic!("Impossible: ArrayMetadata serializes to object")
-        }
-    }
+    /// Set a map of attributes for a group or array.
+    // TODO: determine/fix behavior for implicit groups
+    fn set_attributes(&self, path_name: &str, attributes: JsonObject) -> Result<(), Error>;
 
     /// Create a group (directory).
     fn create_group(&self, path_name: &str) -> Result<(), Error>;
@@ -290,7 +289,7 @@ fn u64_ceil_div(a: u64, b: u64) -> u64 {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct GroupMetadata {
     extensions: Vec<serde_json::Value>,
-    attributes: serde_json::Map<String, serde_json::Value>,
+    attributes: JsonObject,
 }
 
 impl Default for GroupMetadata {

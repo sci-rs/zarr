@@ -201,12 +201,17 @@ pub(crate) fn absolute_relative_paths<N: ZarrTestable>() -> Result<()> {
 pub(crate) fn attributes_rw<N: ZarrTestable>() {
     let wrapper = N::temp_new_rw();
     let create = wrapper.as_ref();
-    let group = "foo";
+    let group = "foo/bar";
     create.create_group(group).expect("Failed to create group");
 
-    // Currently reading attributes that have not been set is an error.
+    assert_eq!(
+        Value::Object(create.list_attributes(group).unwrap()),
+        json!({})
+    );
+
+    // Currently reading attributes of an implicit group is an error.
     // Whether this should be the case is still open for decision.
-    assert!(create.list_attributes(group).is_err());
+    assert!(create.list_attributes("foo").is_err());
 
     let attrs_1 = json!({
         "foo": {"bar": 42},
@@ -218,10 +223,7 @@ pub(crate) fn attributes_rw<N: ZarrTestable>() {
     create
         .set_attributes(group, attrs_1.clone())
         .expect("Failed to set attributes");
-    assert_eq!(
-        create.list_attributes(group).unwrap(),
-        serde_json::Value::Object(attrs_1)
-    );
+    assert_eq!(create.list_attributes(group).unwrap(), attrs_1);
 
     let attrs_2 = json!({
         "baz": [4, 5, 6],
@@ -233,7 +235,7 @@ pub(crate) fn attributes_rw<N: ZarrTestable>() {
         .set_attributes(group, attrs_2)
         .expect("Failed to set attributes");
     assert_eq!(
-        create.list_attributes(group).unwrap(),
+        Value::Object(create.list_attributes(group).unwrap()),
         json!({
             "foo": {"bar": 42},
             "baz": [4, 5, 6],
@@ -251,7 +253,7 @@ pub(crate) fn attributes_rw<N: ZarrTestable>() {
         .set_attributes(group, attrs_2)
         .expect("Failed to set attributes");
     assert_eq!(
-        create.list_attributes(group).unwrap(),
+        Value::Object(create.list_attributes(group).unwrap()),
         json!({
             "foo": {"moo": 7},
             "baz": [4, 5, 6],
@@ -268,10 +270,7 @@ pub(crate) fn attributes_rw<N: ZarrTestable>() {
     create
         .set_attributes(group, attrs_3.clone())
         .expect("Failed to set attributes");
-    assert_eq!(
-        create.list_attributes(group).unwrap(),
-        serde_json::Value::Object(attrs_3)
-    );
+    assert_eq!(create.list_attributes(group).unwrap(), attrs_3);
 }
 
 pub(crate) fn create_chunk_rw<N: ZarrTestable>() {

@@ -23,6 +23,8 @@ use crate::{
     Hierarchy,
     HierarchyReader,
     HierarchyWriter,
+    JsonObject,
+    MetadataError,
     ReflectedType,
     StoreNodeMetadata,
 };
@@ -98,18 +100,17 @@ pub fn get_chunk_key(base_path: &str, array_meta: &ArrayMetadata, grid_position:
     chunk_key
 }
 
-// From: https://github.com/serde-rs/json/issues/377
-// TODO: Could be much better.
-// TODO: zarr filesystem later settled on top-level key merging only.
-fn merge(a: &mut Value, b: &Value) {
-    match (a, b) {
-        (&mut Value::Object(ref mut a), &Value::Object(ref b)) => {
+const ATTRIBUTES_NAME: &str = "attributes";
+
+fn merge_top_level(a: &mut Value, b: JsonObject) {
+    match a {
+        &mut Value::Object(ref mut a) => {
             for (k, v) in b {
-                merge(a.entry(k.clone()).or_insert(Value::Null), v);
+                a.insert(k, v);
             }
         }
-        (a, b) => {
-            *a = b.clone();
+        a => {
+            *a = b.into();
         }
     }
 }
@@ -240,7 +241,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
         todo!()
     }
 
-    fn list_attributes(&self, path_name: &str) -> Result<serde_json::Value, Error> {
+    fn list_attributes(&self, path_name: &str) -> Result<JsonObject, Error> {
         // TODO: wasteful path recomputation
         let metadata_key =
             if self.exists(self.array_metadata_key(path_name).to_str().expect("TODO"))? {
@@ -254,10 +255,25 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
                 ));
             };
 
-        // TODO: race condition
+        // TODO: determine proper missing behavior for implicit groups.
+        // For now return an error.
         let value_reader = ReadableStore::get(self, &metadata_key.to_str().expect("TODO"))?
             .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;
-        Ok(serde_json::from_reader(value_reader)?)
+        let mut value: serde_json::Value = serde_json::from_reader(value_reader)?;
+        let attrs = match value
+            .as_object_mut()
+            .and_then(|o| o.remove(ATTRIBUTES_NAME))
+        {
+            Some(Value::Object(map)) => map,
+            Some(v) => {
+                return Err(Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    MetadataError::UnexpectedType(v),
+                ))
+            }
+            _ => JsonObject::new(),
+        };
+        Ok(attrs)
     }
 }
 
@@ -265,7 +281,7 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
     fn set_attributes(
         &self, // TODO: should this be mut for semantics?
         path_name: &str,
-        attributes: serde_json::Map<String, serde_json::Value>,
+        attributes: JsonObject,
     ) -> Result<(), Error> {
         // TODO: wasteful path recomputation
         let metadata_key =
@@ -283,12 +299,16 @@ impl<S: ReadableStore + WriteableStore + Hierarchy> HierarchyWriter for S {
         // TODO: race condition
         let value_reader = ReadableStore::get(self, &metadata_key.to_str().expect("TODO"))?
             .ok_or_else(|| Error::from(std::io::ErrorKind::NotFound))?;
-        let existing: Value = serde_json::from_reader(value_reader)?;
+        let existing: JsonObject = serde_json::from_reader(value_reader)?;
 
         // TODO: determine whether attribute merging is still necessary for zarr
         let mut merged = existing.clone();
-        let new: Value = attributes.into();
-        merge(&mut merged, &new);
+        match merged.get_mut(ATTRIBUTES_NAME) {
+            Some(merged_attr) => merge_top_level(merged_attr, attributes),
+            None => {
+                merged.insert(ATTRIBUTES_NAME.into(), Value::Object(attributes));
+            }
+        }
         if merged != existing {
             self.set(metadata_key.to_str().expect("TODO"), |writer| {
                 Ok(serde_json::to_writer(writer, &merged)?)

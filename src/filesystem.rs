@@ -238,19 +238,6 @@ impl HierarchyLister for FilesystemHierarchy {
     }
 }
 
-fn merge_top_level(a: &mut Value, b: serde_json::Map<String, Value>) {
-    match a {
-        &mut Value::Object(ref mut a) => {
-            for (k, v) in b {
-                a.insert(k, v);
-            }
-        }
-        a => {
-            *a = b.into();
-        }
-    }
-}
-
 impl WriteableStore for FilesystemHierarchy {
     type SetWriter = BufWriter<File>;
 
