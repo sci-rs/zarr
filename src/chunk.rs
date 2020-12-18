@@ -1,6 +1,7 @@
 use std::io::{
     Error,
     ErrorKind,
+    Result,
 };
 use std::marker::PhantomData;
 
@@ -37,21 +38,13 @@ pub trait ReadableDataChunk {
     ///
     /// Read the stream directly into the chunk data instead
     /// of creating a copied byte buffer.
-    fn read_data<R: std::io::Read>(
-        &mut self,
-        source: R,
-        array_meta: &ArrayMetadata,
-    ) -> std::io::Result<()>;
+    fn read_data<R: std::io::Read>(&mut self, source: R, array_meta: &ArrayMetadata) -> Result<()>;
 }
 
 /// Traits for data chunks that can write out data.
 pub trait WriteableDataChunk {
     /// Write the data from this chunk into a target.
-    fn write_data<W: std::io::Write>(
-        &self,
-        target: W,
-        array_meta: &ArrayMetadata,
-    ) -> std::io::Result<()>;
+    fn write_data<W: std::io::Write>(&self, target: W, array_meta: &ArrayMetadata) -> Result<()>;
 }
 
 /// Common interface for data chunks of element (rust) type `T`.
@@ -112,7 +105,7 @@ macro_rules! vec_data_chunk_impl {
                 &mut self,
                 mut source: R,
                 array_meta: &ArrayMetadata,
-            ) -> std::io::Result<()> {
+            ) -> Result<()> {
                 match array_meta.data_type.effective_type()?.endian() {
                     Endian::Big => source.$bo_read_fn::<BigEndian>(self.data.as_mut()),
                     Endian::Little => source.$bo_read_fn::<LittleEndian>(self.data.as_mut()),
@@ -125,7 +118,7 @@ macro_rules! vec_data_chunk_impl {
                 &self,
                 mut target: W,
                 array_meta: &ArrayMetadata,
-            ) -> std::io::Result<()> {
+            ) -> Result<()> {
                 const CHUNK: usize = 256;
                 let mut buf: [u8; CHUNK * std::mem::size_of::<$ty_name>()] =
                     [0; CHUNK * std::mem::size_of::<$ty_name>()];
@@ -149,7 +142,7 @@ macro_rules! vec_data_chunk_impl {
 // Wrapper trait to erase a generic trait argument for consistent ByteOrder
 // signatures.
 trait ReadBytesExtI8: ReadBytesExt {
-    fn read_i8_into_wrapper<B: ByteOrder>(&mut self, dst: &mut [i8]) -> std::io::Result<()> {
+    fn read_i8_into_wrapper<B: ByteOrder>(&mut self, dst: &mut [i8]) -> Result<()> {
         self.read_i8_into(dst)
     }
 }
@@ -170,7 +163,7 @@ impl<C: AsMut<[u8]>> ReadableDataChunk for SliceDataChunk<u8, C> {
         &mut self,
         mut source: R,
         _array_meta: &ArrayMetadata,
-    ) -> std::io::Result<()> {
+    ) -> Result<()> {
         source.read_exact(self.data.as_mut())
     }
 }
@@ -180,7 +173,7 @@ impl<C: AsRef<[u8]>> WriteableDataChunk for SliceDataChunk<u8, C> {
         &self,
         mut target: W,
         _array_meta: &ArrayMetadata,
-    ) -> std::io::Result<()> {
+    ) -> Result<()> {
         target.write_all(self.data.as_ref())
     }
 }
@@ -190,7 +183,7 @@ impl<C: AsMut<[bool]>> ReadableDataChunk for SliceDataChunk<bool, C> {
         &mut self,
         mut source: R,
         _array_meta: &ArrayMetadata,
-    ) -> std::io::Result<()> {
+    ) -> Result<()> {
         const CHUNK: usize = 256;
         let mut buf: [u8; CHUNK] = [0; CHUNK];
 
@@ -211,7 +204,7 @@ impl<C: AsRef<[bool]>> WriteableDataChunk for SliceDataChunk<bool, C> {
         &self,
         mut target: W,
         _array_meta: &ArrayMetadata,
-    ) -> std::io::Result<()> {
+    ) -> Result<()> {
         const CHUNK: usize = 256;
         let mut buf: [u8; CHUNK] = [0; CHUNK];
 
@@ -231,7 +224,7 @@ impl<C: AsMut<[f16]>> ReadableDataChunk for SliceDataChunk<f16, C> {
         &mut self,
         mut source: R,
         array_meta: &ArrayMetadata,
-    ) -> std::io::Result<()> {
+    ) -> Result<()> {
         // TODO: no chunking
         let endian = array_meta.data_type.effective_type()?.endian();
         for n in self.data.as_mut() {
@@ -251,7 +244,7 @@ impl<C: AsRef<[f16]>> WriteableDataChunk for SliceDataChunk<f16, C> {
         &self,
         mut target: W,
         array_meta: &ArrayMetadata,
-    ) -> std::io::Result<()> {
+    ) -> Result<()> {
         // TODO: no chunking
         let endian = array_meta.data_type.effective_type()?.endian();
         for n in self.data.as_ref() {
@@ -279,26 +272,32 @@ impl<T: ReflectedType, C: AsRef<[T]>> DataChunk<T> for SliceDataChunk<T, C> {
     }
 }
 
+fn check_array_type<T: ReflectedType>(array_meta: &ArrayMetadata) -> Result<()> {
+    if array_meta
+        .data_type
+        .effective_type()?
+        .eq_modulo_endian(&T::ZARR_TYPE)
+    {
+        Ok(())
+    } else {
+        Err(Error::new(
+            ErrorKind::InvalidInput,
+            "Attempt to create data chunk for wrong type.",
+        ))
+    }
+}
+
 /// Reads chunks from rust readers.
 pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read> {
     fn read_chunk(
         buffer: R,
         array_meta: &ArrayMetadata,
         grid_position: GridCoord,
-    ) -> std::io::Result<VecDataChunk<T>>
+    ) -> Result<VecDataChunk<T>>
     where
         VecDataChunk<T>: DataChunk<T> + ReadableDataChunk,
     {
-        if !array_meta
-            .data_type
-            .effective_type()?
-            .eq_modulo_endian(&T::ZARR_TYPE)
-        {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "Attempt to create data chunk for wrong type.",
-            ));
-        }
+        check_array_type::<T>(array_meta)?;
 
         let mut chunk =
             T::create_data_chunk(&grid_position, array_meta.get_chunk_num_elements() as u32);
@@ -313,17 +312,8 @@ pub trait DefaultChunkReader<T: ReflectedType, R: std::io::Read> {
         array_meta: &ArrayMetadata,
         grid_position: GridCoord,
         chunk: &mut B,
-    ) -> std::io::Result<()> {
-        if !array_meta
-            .data_type
-            .effective_type()?
-            .eq_modulo_endian(&T::ZARR_TYPE)
-        {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "Attempt to create data chunk for wrong type.",
-            ));
-        }
+    ) -> Result<()> {
+        check_array_type::<T>(array_meta)?;
 
         chunk.reinitialize(&grid_position, array_meta.get_chunk_num_elements() as u32);
         let mut decompressed = array_meta.compressor.decoder(buffer);
@@ -340,17 +330,8 @@ pub trait DefaultChunkWriter<
     B: DataChunk<T> + WriteableDataChunk,
 >
 {
-    fn write_chunk(buffer: W, array_meta: &ArrayMetadata, chunk: &B) -> std::io::Result<()> {
-        if !array_meta
-            .data_type
-            .effective_type()?
-            .eq_modulo_endian(&T::ZARR_TYPE)
-        {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "Attempt to write data chunk for wrong type.",
-            ));
-        }
+    fn write_chunk(buffer: W, array_meta: &ArrayMetadata, chunk: &B) -> Result<()> {
+        check_array_type::<T>(array_meta)?;
 
         let mut compressor = array_meta.compressor.encoder(buffer);
         chunk.write_data(&mut compressor, array_meta)?;
