@@ -6,8 +6,11 @@ use serde::{
     Serialize,
 };
 
-use crate::GridCoord;
-use crate::VecDataChunk;
+use crate::{
+    GridCoord,
+    MetadataError,
+    VecDataChunk,
+};
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum IntSize {
@@ -97,7 +100,7 @@ impl Endian {
     }
 }
 
-// /// Data types representable in Zarr.
+/// Data types representable in Zarr.
 ///
 /// ```
 /// use zarr::data_type::{Endian, IntSize, FloatSize, DataType};
@@ -252,6 +255,71 @@ impl<'de> Deserialize<'de> for DataType {
         D: serde::Deserializer<'de>,
     {
         deserializer.deserialize_str(DataTypeVisitor)
+    }
+}
+
+/// TODO
+///
+/// ```
+/// use zarr::data_type::{
+///     DataType,
+///     IntSize,
+///     Endian,
+///     ExtensibleDataType,
+///     FloatSize,
+/// };
+/// use serde_json;
+///
+/// let example_1: ExtensibleDataType = serde_json::from_str(r#""<f8""#).unwrap();
+/// let ext_1 = ExtensibleDataType::Core(DataType::Float { size: FloatSize::B8, endian: Endian::Little });
+/// assert_eq!(example_1, ext_1);
+///
+/// let example_2: ExtensibleDataType = serde_json::from_str(r#"
+///     {
+///        "extension": "https://purl.org/zarr/spec/protocol/extensions/datetime-dtypes/1.0",
+///        "type": "<M8[ns]",
+///        "fallback": "<i8"
+///     }"#).unwrap();
+/// let ext_2 = ExtensibleDataType::Extended {
+///     extension: "https://purl.org/zarr/spec/protocol/extensions/datetime-dtypes/1.0".to_owned(),
+///     type_string: "<M8[ns]".to_owned(),
+///     fallback: Some(DataType::Int {size: IntSize::B8, endian: Endian::Little})
+/// };
+/// assert_eq!(example_2, ext_2);
+/// ```
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ExtensibleDataType {
+    Core(DataType),
+    Extended {
+        extension: String,
+        #[serde(rename = "type")]
+        type_string: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fallback: Option<DataType>,
+    },
+}
+
+// TODO: needs to be a trait generalizing over core and extended data types
+// providing sizing and other operations.
+
+impl ExtensibleDataType {
+    // TODO: kludge that will need to be replaced to support extended types.
+    pub fn effective_type(&self) -> Result<DataType, MetadataError> {
+        use ExtensibleDataType::*;
+        match self {
+            Core(d) => Ok(*d),
+            Extended {
+                fallback: Some(d), ..
+            } => Ok(*d),
+            _ => todo!(),
+        }
+    }
+}
+
+impl From<DataType> for ExtensibleDataType {
+    fn from(d: DataType) -> Self {
+        Self::Core(d)
     }
 }
 

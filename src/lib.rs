@@ -96,6 +96,18 @@ pub enum MetadataError {
     UnknownRequiredExtension(ExtensionMetadata),
 }
 
+impl From<MetadataError> for std::io::Error {
+    fn from(e: MetadataError) -> std::io::Error {
+        use std::io::ErrorKind;
+        use MetadataError::*;
+
+        match e {
+            UnexpectedType(..) => Error::new(ErrorKind::InvalidData, e),
+            UnknownRequiredExtension(..) => Error::new(ErrorKind::Other, e),
+        }
+    }
+}
+
 /// Store metadata about a node.
 ///
 /// This is metadata from the persistence layer of the hierarchy, such as
@@ -352,7 +364,7 @@ pub struct ArrayMetadata {
     /// Dimensions of the entire array, in voxels.
     shape: GridCoord,
     /// Element data type.
-    data_type: DataType,
+    data_type: ExtensibleDataType,
     /// Compression scheme for voxel data in each chunk.
     compressor: compression::CompressionType,
     /// TODO
@@ -372,10 +384,10 @@ pub struct ChunkGridMetadata {
 }
 
 impl ArrayMetadata {
-    pub fn new(
+    pub fn new<D: Into<ExtensibleDataType>>(
         shape: GridCoord,
         chunk_shape: ChunkCoord,
-        data_type: DataType,
+        data_type: D,
         compressor: compression::CompressionType,
     ) -> ArrayMetadata {
         assert_eq!(
@@ -385,7 +397,7 @@ impl ArrayMetadata {
         );
         ArrayMetadata {
             shape,
-            data_type,
+            data_type: data_type.into(),
             compressor,
             // TODO
             chunk_grid: ChunkGridMetadata {
@@ -405,7 +417,7 @@ impl ArrayMetadata {
         &self.chunk_grid.chunk_shape
     }
 
-    pub fn get_data_type(&self) -> &DataType {
+    pub fn get_data_type(&self) -> &ExtensibleDataType {
         &self.data_type
     }
 

@@ -4,7 +4,7 @@ TODO
 
 ## Minimum supported Rust version (MSRV)
 
-Stable 1.40
+Stable 1.41
 
 ## Quick start
 

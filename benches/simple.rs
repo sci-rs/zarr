@@ -50,7 +50,12 @@ where
         .expect("read_chunk failed");
     });
 
-    b.bytes = (array_meta.get_chunk_num_elements() * array_meta.get_data_type().size_of()) as u64;
+    b.bytes = (array_meta.get_chunk_num_elements()
+        * array_meta
+            .get_data_type()
+            .effective_type()
+            .unwrap()
+            .size_of()) as u64;
 }
 
 #[bench]

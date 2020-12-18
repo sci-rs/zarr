@@ -111,7 +111,7 @@ macro_rules! vec_data_chunk_impl {
                 mut source: R,
                 array_meta: &ArrayMetadata,
             ) -> std::io::Result<()> {
-                match array_meta.data_type.endian() {
+                match array_meta.data_type.effective_type()?.endian() {
                     Endian::Big => source.$bo_read_fn::<BigEndian>(self.data.as_mut()),
                     Endian::Little => source.$bo_read_fn::<LittleEndian>(self.data.as_mut()),
                 }
@@ -128,7 +128,7 @@ macro_rules! vec_data_chunk_impl {
                 let mut buf: [u8; CHUNK * std::mem::size_of::<$ty_name>()] =
                     [0; CHUNK * std::mem::size_of::<$ty_name>()];
 
-                let endian = array_meta.data_type.endian();
+                let endian = array_meta.data_type.effective_type()?.endian();
                 for c in self.data.as_ref().chunks(CHUNK) {
                     let byte_len = c.len() * std::mem::size_of::<$ty_name>();
                     match endian {
@@ -231,7 +231,7 @@ impl<C: AsMut<[f16]>> ReadableDataChunk for SliceDataChunk<f16, C> {
         array_meta: &ArrayMetadata,
     ) -> std::io::Result<()> {
         // TODO: no chunking
-        let endian = array_meta.data_type.endian();
+        let endian = array_meta.data_type.effective_type()?.endian();
         for n in self.data.as_mut() {
             let mut bytes = [0; 2];
             source.read_exact(&mut bytes[..])?;
@@ -251,7 +251,7 @@ impl<C: AsRef<[f16]>> WriteableDataChunk for SliceDataChunk<f16, C> {
         array_meta: &ArrayMetadata,
     ) -> std::io::Result<()> {
         // TODO: no chunking
-        let endian = array_meta.data_type.endian();
+        let endian = array_meta.data_type.effective_type()?.endian();
         for n in self.data.as_ref() {
             let bytes = match endian {
                 Endian::Big => n.to_be_bytes(),

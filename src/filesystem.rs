@@ -54,10 +54,7 @@ impl FilesystemHierarchy {
         if let Some(ext) = metadata.extensions.iter().find(|e| e.must_understand) {
             // TODO: returning an io::Error wrapped custom error, rather than other
             // way around.
-            return Err(Error::new(
-                ErrorKind::Other,
-                MetadataError::UnknownRequiredExtension(ext.clone()),
-            ));
+            return Err(MetadataError::UnknownRequiredExtension(ext.clone()).into());
         }
         Ok(metadata)
     }

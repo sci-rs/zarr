@@ -146,10 +146,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
         if let Some(ext) = metadata.extensions.iter().find(|e| e.must_understand) {
             // TODO: returning an io::Error wrapped custom error, rather than other
             // way around.
-            return Err(Error::new(
-                ErrorKind::Other,
-                MetadataError::UnknownRequiredExtension(ext.clone()),
-            ));
+            return Err(MetadataError::UnknownRequiredExtension(ext.clone()).into());
         }
         Ok(metadata)
     }
@@ -276,12 +273,7 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
             .and_then(|o| o.remove(ATTRIBUTES_NAME))
         {
             Some(Value::Object(map)) => map,
-            Some(v) => {
-                return Err(Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    MetadataError::UnexpectedType(v),
-                ))
-            }
+            Some(v) => return Err(MetadataError::UnexpectedType(v).into()),
             _ => JsonObject::new(),
         };
         Ok(attrs)
