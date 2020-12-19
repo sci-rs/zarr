@@ -443,7 +443,7 @@ impl ArrayMetadata {
             .get_fill_value()
             .map(|v| serde_json::from_value(v.clone()))
             .transpose()?
-            .unwrap_or_else(|| T::default()))
+            .unwrap_or_else(T::default))
     }
 
     pub fn get_data_type(&self) -> &ExtensibleDataType {
