@@ -162,7 +162,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
     ) -> Result<ndarray::Array<T, ndarray::Dim<ndarray::IxDynImpl>>, Error>
     where
         VecDataChunk<T>: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
-        T: ReflectedType + num_traits::identities::Zero,
+        T: ReflectedType,
     {
         let chunk_shape = match array_meta.get_chunk_memory_layout() {
             Order::ColumnMajor => bbox.shape_ndarray_shape().f(),
@@ -190,7 +190,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
     ) -> Result<(), Error>
     where
         VecDataChunk<T>: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
-        T: ReflectedType + num_traits::identities::Zero,
+        T: ReflectedType,
     {
         self.read_ndarray_into_with_buffer(path_name, array_meta, bbox, arr, &mut None)
     }
@@ -211,7 +211,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
     ) -> Result<(), Error>
     where
         VecDataChunk<T>: DataChunk<T> + ReinitDataChunk<T> + ReadableDataChunk,
-        T: ReflectedType + num_traits::identities::Zero,
+        T: ReflectedType,
     {
         if bbox.offset.len() != array_meta.get_ndim() || array_meta.get_ndim() != arr.ndim() {
             return Err(Error::new(
@@ -297,7 +297,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
     // TODO: Next breaking version, refactor to use `SliceDataChunk` bounds.
     where
         VecDataChunk<T>: DataChunk<T> + ReadableDataChunk + WriteableDataChunk,
-        T: ReflectedType + num_traits::identities::Zero,
+        T: ReflectedType,
         A: ndarray::AsArray<'a, T, ndarray::Dim<ndarray::IxDynImpl>>,
     {
         let array = array.into();
