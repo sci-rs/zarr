@@ -152,8 +152,6 @@ impl Sub<&GridCoord> for BoundingBox {
 pub trait ZarrNdarrayReader: HierarchyReader {
     /// Read an arbitrary bounding box from an Zarr volume into an ndarray,
     /// reading chunks in serial as necessary.
-    ///
-    /// Assumes chunks are column-major and returns a column-major ndarray.
     fn read_ndarray<T>(
         &self,
         path_name: &str,
@@ -178,9 +176,6 @@ pub trait ZarrNdarrayReader: HierarchyReader {
 
     /// Read an arbitrary bounding box from an Zarr volume into an existing
     /// ndarray view, reading chunks in serial as necessary.
-    ///
-    /// Assumes chunks are column-major. The array can be any order, but column-
-    /// major will be more efficient.
     fn read_ndarray_into<'a, T>(
         &self,
         path_name: &str,
@@ -198,9 +193,6 @@ pub trait ZarrNdarrayReader: HierarchyReader {
     /// Read an arbitrary bounding box from an Zarr volume into an existing
     /// ndarray view, reading chunks in serial as necessary into a provided
     /// buffer.
-    ///
-    /// Assumes chunks are column-major. The array can be any order, but column-
-    /// major will be more efficient.
     fn read_ndarray_into_with_buffer<'a, T>(
         &self,
         path_name: &str,
@@ -265,12 +257,7 @@ pub trait ZarrNdarrayReader: HierarchyReader {
 
                 let chunk_slice = chunk_read_bb.to_ndarray_slice();
 
-                let chunk_shape = match array_meta.get_chunk_memory_layout() {
-                    Order::ColumnMajor => chunk_bb.shape_ndarray_shape().f(),
-                    Order::RowMajor => chunk_bb.shape_ndarray_shape()[..].into_shape(),
-                };
-                let chunk_data = ArrayView::from_shape(chunk_shape, chunk.get_data())
-                    .expect("TODO: chunk ndarray failed");
+                let chunk_data = chunk.as_ndarray(array_meta);
                 let chunk_view =
                     chunk_data.slice(SliceInfo::<_, IxDyn>::new(chunk_slice).unwrap().as_ref());
 
@@ -314,6 +301,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
         let fill_value: T = array_meta.get_effective_fill_value()?;
 
         let mut chunk_vec: Vec<T> = Vec::new();
+        let mut existing_chunk_vec: Vec<T> = Vec::new();
 
         for coord in array_meta.bounded_coord_iter(&bbox) {
             let grid_coord = GridCoord::from(&coord[..]);
@@ -329,23 +317,25 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                 // No need to read whether there is an extant chunk if it is
                 // going to be entirely overwriten.
                 chunk_vec.clear();
+                // TODO: need to adjust `t` based on array ordering?
                 chunk_vec.extend(arr_view.t().iter().cloned());
                 let chunk = VecDataChunk::new(coord.into(), chunk_vec);
 
                 self.write_chunk(path_name, array_meta, &chunk)?;
                 chunk_vec = chunk.into_data();
             } else {
-                let chunk_opt = self.read_chunk(path_name, array_meta, grid_coord.clone())?;
+                let mut existing_chunk = VecDataChunk::new(grid_coord.clone(), existing_chunk_vec);
+                let chunk_opt = self.read_chunk_into(
+                    path_name,
+                    array_meta,
+                    grid_coord.clone(),
+                    &mut existing_chunk,
+                )?;
 
                 let (chunk_bb, mut chunk_array) = match chunk_opt {
-                    Some(chunk) => {
-                        let chunk_bb = chunk.get_bounds(array_meta);
-                        let chunk_shape = match array_meta.get_chunk_memory_layout() {
-                            Order::ColumnMajor => chunk_bb.shape_ndarray_shape().f(),
-                            Order::RowMajor => chunk_bb.shape_ndarray_shape()[..].into_shape(),
-                        };
-                        let chunk_array = Array::from_shape_vec(chunk_shape, chunk.into_data())
-                            .expect("TODO: chunk ndarray failed");
+                    Some(()) => {
+                        let chunk_bb = existing_chunk.get_bounds(array_meta);
+                        let chunk_array = existing_chunk.into_ndarray(array_meta);
                         (chunk_bb, chunk_array)
                     }
                     None => {
@@ -359,9 +349,14 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                             .for_each(|((s, o), g)| *s += *o - *g);
                         chunk_bb.offset = nom_chunk_bb.offset.clone();
                         let chunk_shape_usize = chunk_bb.shape_ndarray_shape();
+                        existing_chunk_vec = existing_chunk.into_data();
+                        existing_chunk_vec.clear();
+                        existing_chunk_vec
+                            .resize(chunk_shape_usize.iter().product(), fill_value.clone());
 
                         let chunk_array =
-                            Array::from_elem(&chunk_shape_usize[..], fill_value.clone()).into_dyn();
+                            Array::from_shape_vec(&chunk_shape_usize[..], existing_chunk_vec)
+                                .expect("TODO: chunk ndarray failed");
                         (chunk_bb, chunk_array)
                     }
                 };
@@ -374,11 +369,13 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                 chunk_view.assign(&arr_view);
 
                 chunk_vec.clear();
+                // TODO: need to adjust `t` based on array ordering?
                 chunk_vec.extend(chunk_array.t().iter().cloned());
                 let chunk = VecDataChunk::new(coord.into(), chunk_vec);
 
                 self.write_chunk(path_name, array_meta, &chunk)?;
                 chunk_vec = chunk.into_data();
+                existing_chunk_vec = chunk_array.into_raw_vec();
             }
         }
 
@@ -446,17 +443,39 @@ impl ArrayMetadata {
 }
 
 impl<T: ReflectedType, C: AsRef<[T]>> SliceDataChunk<T, C> {
-    /// Get the bounding box of the occupied extent of this chunk, which may
-    /// be smaller than the nominal bounding box expected from the array.
+    /// Get the bounding box of the occupied extent of this chunk.
+    /// In Zarr all chunks in an array are the same shape.
     pub fn get_bounds(&self, array_meta: &ArrayMetadata) -> BoundingBox {
-        let mut bbox = array_meta.get_chunk_bounds(self.get_grid_position());
-        bbox.shape = array_meta
-            .get_chunk_shape()
-            .iter()
-            .cloned()
-            .map(u64::from)
-            .collect();
-        bbox
+        array_meta.get_chunk_bounds(self.get_grid_position())
+    }
+
+    fn shape_ndarray_shape(
+        &self,
+        array_meta: &ArrayMetadata,
+    ) -> ndarray::Shape<ndarray::Dim<ndarray::IxDynImpl>> {
+        let chunk_bb = self.get_bounds(array_meta);
+        match array_meta.get_chunk_memory_layout() {
+            Order::ColumnMajor => chunk_bb.shape_ndarray_shape().f(),
+            Order::RowMajor => chunk_bb.shape_ndarray_shape()[..].into_shape(),
+        }
+    }
+
+    pub fn as_ndarray(
+        &self,
+        array_meta: &ArrayMetadata,
+    ) -> ArrayView<T, ndarray::Dim<ndarray::IxDynImpl>> {
+        let chunk_shape = self.shape_ndarray_shape(array_meta);
+        ArrayView::from_shape(chunk_shape, self.get_data()).expect("TODO: chunk ndarray failed")
+    }
+}
+
+impl<T: ReflectedType> VecDataChunk<T> {
+    pub fn into_ndarray(
+        self,
+        array_meta: &ArrayMetadata,
+    ) -> Array<T, ndarray::Dim<ndarray::IxDynImpl>> {
+        let chunk_shape = self.shape_ndarray_shape(array_meta);
+        Array::from_shape_vec(chunk_shape, self.into_data()).expect("TODO: chunk ndarray failed")
     }
 }
 
