@@ -434,6 +434,18 @@ impl ArrayMetadata {
         &self.chunk_memory_layout
     }
 
+    pub fn get_fill_value(&self) -> Option<&Value> {
+        self.fill_value.as_ref()
+    }
+
+    pub fn get_effective_fill_value<T: ReflectedType>(&self) -> Result<T, Error> {
+        Ok(self
+            .get_fill_value()
+            .map(|v| serde_json::from_value(v.clone()))
+            .transpose()?
+            .unwrap_or_else(|| T::default()))
+    }
+
     pub fn get_data_type(&self) -> &ExtensibleDataType {
         &self.data_type
     }

@@ -157,7 +157,7 @@ fn test_write_read_ndarray() {
             .into_dyn();
     let offset = smallvec![0, 5, 4, 3];
 
-    n.write_ndarray(path_name, &array_meta, offset.clone(), &array, 0)
+    n.write_ndarray(path_name, &array_meta, offset.clone(), &array)
         .unwrap();
 
     let bbox = BoundingBox::new(offset, arr_shape.iter().map(|s| *s as u64).collect());

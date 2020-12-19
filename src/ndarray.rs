@@ -168,7 +168,8 @@ pub trait ZarrNdarrayReader: HierarchyReader {
             Order::ColumnMajor => bbox.shape_ndarray_shape().f(),
             Order::RowMajor => bbox.shape_ndarray_shape()[..].into_shape(),
         };
-        let mut arr = Array::zeros(chunk_shape);
+        let fill_value = array_meta.get_effective_fill_value()?;
+        let mut arr = Array::from_elem(chunk_shape, fill_value);
 
         self.read_ndarray_into(path_name, array_meta, bbox, arr.view_mut())?;
 
@@ -292,7 +293,6 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
         array_meta: &ArrayMetadata,
         offset: GridCoord,
         array: A,
-        fill_val: T,
     ) -> Result<(), Error>
     // TODO: Next breaking version, refactor to use `SliceDataChunk` bounds.
     where
@@ -311,6 +311,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
             offset,
             shape: array.shape().iter().map(|n| *n as u64).collect(),
         };
+        let fill_value: T = array_meta.get_effective_fill_value()?;
 
         let mut chunk_vec: Vec<T> = Vec::new();
 
@@ -360,7 +361,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                         let chunk_shape_usize = chunk_bb.shape_ndarray_shape();
 
                         let chunk_array =
-                            Array::from_elem(&chunk_shape_usize[..], fill_val.clone()).into_dyn();
+                            Array::from_elem(&chunk_shape_usize[..], fill_value.clone()).into_dyn();
                         (chunk_bb, chunk_array)
                     }
                 };
