@@ -276,9 +276,9 @@ pub trait HierarchyReader: Hierarchy {
 }
 
 /// Non-mutating operations on Zarr hierarchys that support group discoverability.
-pub trait HierarchyLister: HierarchyReader {
+pub trait HierarchyLister {
     /// List all groups (including arrays) in a group.
-    fn list(&self, path_name: &str) -> Result<Vec<String>, Error>;
+    fn list_nodes(&self, prefix_path: &str) -> Result<Vec<String>, Error>;
 }
 
 /// Mutating operations on Zarr hierarchys.

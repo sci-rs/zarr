@@ -21,6 +21,7 @@ use crate::{
     GridCoord,
     GroupMetadata,
     Hierarchy,
+    HierarchyLister,
     HierarchyReader,
     HierarchyWriter,
     JsonObject,
@@ -39,6 +40,31 @@ pub trait ReadableStore {
 
     /// TODO: not in zarr spec
     fn uri(&self, key: &str) -> Result<String, Error>;
+}
+
+pub trait ListableStore {
+    /// Retrieve all keys in the store.
+    fn list(&self) -> Result<Vec<String>, Error> {
+        self.list_prefix("/")
+    }
+
+    /// Retrieve all keys with a given prefix.
+    fn list_prefix(&self, prefix: &str) -> Result<Vec<String>, Error> {
+        let mut to_visit = vec![prefix.to_owned()];
+        let mut result = vec![];
+
+        while let Some(next) = to_visit.pop() {
+            let dir = self.list_dir(&next)?;
+            result.extend(dir.0);
+            to_visit.extend(dir.1);
+        }
+
+        Ok(result)
+    }
+
+    /// Retrieve all keys and prefixes with a given prefix and which do not
+    /// contain the character “/” after the given prefix.
+    fn list_dir(&self, prefix: &str) -> Result<(Vec<String>, Vec<String>), Error>;
 }
 
 pub trait WriteableStore {
@@ -277,6 +303,57 @@ impl<S: ReadableStore + Hierarchy> HierarchyReader for S {
             _ => JsonObject::new(),
         };
         Ok(attrs)
+    }
+}
+
+impl<S: ListableStore + Hierarchy> HierarchyLister for S {
+    fn list_nodes(&self, prefix_path: &str) -> Result<Vec<String>, Error> {
+        // TODO: Inelegant.
+
+        let key_prefix = format!(
+            "{}/{}",
+            crate::META_ROOT_PATH,
+            crate::canonicalize_path(prefix_path)
+        );
+        let (mut keys, mut prefixes) = self.list_dir(&key_prefix)?;
+
+        // Find array and group metadata keys.
+        keys.retain(|k| k.ends_with(&self.get_entry_point_metadata().metadata_key_suffix));
+        keys.iter_mut().for_each(|k| {
+            k.truncate(k.len() - self.get_entry_point_metadata().metadata_key_suffix.len())
+        });
+        keys.retain(|k| {
+            k.ends_with(&crate::ARRAY_METADATA_KEY_EXT)
+                || k.ends_with(&crate::GROUP_METADATA_KEY_EXT)
+        });
+        assert_eq!(
+            crate::ARRAY_METADATA_KEY_EXT.len(),
+            crate::GROUP_METADATA_KEY_EXT.len()
+        );
+
+        // Remove metadata extensions from keys to partially convert to node paths.
+        let suffix_len = self.get_entry_point_metadata().metadata_key_suffix.len()
+            + crate::ARRAY_METADATA_KEY_EXT.len()
+            + 1;
+        keys.iter_mut()
+            .for_each(|k| k.truncate(k.len() - suffix_len));
+
+        // Add potential implicit groups.
+        prefixes
+            .iter_mut()
+            .for_each(|p| p.truncate(p.trim_end_matches('/').len()));
+        keys.extend(prefixes.drain(..));
+
+        // Remove duplicates.
+        keys.sort();
+        keys.dedup();
+
+        // Remove key prefix to convert to node path.
+        keys.iter_mut().for_each(|k| {
+            k.drain(..key_prefix.len());
+        });
+
+        Ok(keys)
     }
 }
 

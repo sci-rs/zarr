@@ -23,12 +23,12 @@ use walkdir::WalkDir;
 
 use crate::{
     storage::{
+        ListableStore,
         ReadableStore,
         WriteableStore,
     },
     EntryPointMetadata,
     Hierarchy,
-    HierarchyLister,
     HierarchyReader,
     MetadataError,
 };
@@ -222,26 +222,35 @@ impl ReadableStore for FilesystemHierarchy {
     }
 }
 
-impl HierarchyLister for FilesystemHierarchy {
-    fn list(&self, path_name: &str) -> Result<Vec<String>> {
+impl ListableStore for FilesystemHierarchy {
+    fn list_dir(&self, prefix: &str) -> Result<(Vec<String>, Vec<String>)> {
+        let mut keys = vec![];
+        let mut prefixes = vec![];
+        let target = self.get_path(prefix)?;
+
         // TODO: shouldn't do this in a closure to not equivocate errors with Nones.
-        Ok(fs::read_dir(self.get_path(path_name)?)?
-            .filter_map(|e| {
-                if let Ok(file) = e {
-                    if fs::metadata(file.path())
-                        .map(|f| f.file_type().is_dir())
-                        .ok()
-                        == Some(true)
-                    {
-                        file.file_name().into_string().ok()
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+        let entries = fs::read_dir(target)?.filter_map(|e| {
+            e.and_then(|file| {
+                fs::metadata(file.path()).map(|f| f.file_type()).map(|t| {
+                    (
+                        format!("{}{}", prefix, file.file_name().to_str().unwrap()),
+                        t,
+                    )
+                })
             })
-            .collect())
+            .ok()
+        });
+
+        for (key, t) in entries {
+            if t.is_file() {
+                keys.push(key);
+            } else {
+                // t.is_dir() == true, because symlinks were followed.
+                prefixes.push(key);
+            }
+        }
+
+        Ok((keys, prefixes))
     }
 }
 
@@ -315,6 +324,7 @@ mod tests {
         chunk::DataChunk,
         data_type::ReflectedType,
         ArrayMetadata,
+        HierarchyLister,
         HierarchyWriter,
     };
     use tempdir::TempDir;
@@ -378,14 +388,16 @@ mod tests {
         let wrapper = FilesystemHierarchy::temp_new_rw();
         let dir = TempDir::new("rust_zarr_tests_dupe").unwrap();
         let mut linked_path = wrapper.context.path().to_path_buf();
+        linked_path.push(crate::META_ROOT_PATH.trim_start_matches('/'));
         linked_path.push("linked_array");
 
+        std::fs::create_dir_all(linked_path.parent().unwrap()).unwrap();
         #[cfg(target_family = "unix")]
         std::os::unix::fs::symlink(dir.path(), &linked_path).unwrap();
         #[cfg(target_family = "windows")]
         std::os::windows::fs::symlink_dir(dir.path(), &linked_path).unwrap();
 
-        assert_eq!(wrapper.zarr.list("").unwrap(), vec!["linked_array"]);
+        assert_eq!(wrapper.zarr.list_nodes("").unwrap(), vec!["linked_array"]);
         // TODO
         // assert!(wrapper.zarr.exists("linked_array").unwrap());
 
