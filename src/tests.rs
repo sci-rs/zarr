@@ -117,14 +117,16 @@ pub(crate) fn test_varlength_chunk_rw(compression: compression::CompressionType)
 
     let mut inner: Vec<u8> = Vec::new();
 
-    <DefaultChunk as DefaultChunkWriter<i32, _, _>>::write_chunk(
-        &mut inner,
-        &array_meta,
-        &chunk_in,
-    )
-    .expect("write_chunk failed");
-
     // In Zarr chunks must fill the chunk shape, so this should err.
+    assert!(
+        <DefaultChunk as DefaultChunkWriter<i32, _, _>>::write_chunk(
+            &mut inner,
+            &array_meta,
+            &chunk_in,
+        )
+        .is_err()
+    );
+
     assert!(<DefaultChunk as DefaultChunkReader<i32, _>>::read_chunk(
         &inner[..],
         &array_meta,
@@ -326,11 +328,8 @@ pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
     // Shorten data (this still will not catch trailing data less than the length).
     let chunk_data: Vec<i32> = (0..10_i32).collect();
     let chunk_in = crate::SliceDataChunk::new(smallvec![0, 0, 0], &chunk_data);
-    create
+    assert!(create
         .write_chunk("foo/bar", &array_meta, &chunk_in)
-        .expect("Failed to write chunk");
-    assert!(read
-        .read_chunk::<i32>("foo/bar", &array_meta, smallvec![0, 0, 0])
         .is_err());
 }
 

@@ -430,13 +430,9 @@ mod tests {
 
     #[test]
     pub(crate) fn short_chunk_truncation() {
-        // TODO: this test was created for N5 with varlength chunks, but is not
-        // ideal for Zarr. While shorter (bytewise) chunks being truncated
-        // correctly is important, this would happen in Zarr due to compression
-        // only, not variable chunk size.
         let wrapper = FilesystemHierarchy::temp_new_rw();
         let create = wrapper.as_ref();
-        let array_meta = ArrayMetadata::new(
+        let mut array_meta = ArrayMetadata::new(
             smallvec![10, 10, 10],
             smallvec![5, 5, 5],
             i32::ZARR_TYPE,
@@ -468,6 +464,7 @@ mod tests {
 
         // Shorten data (this still will not catch trailing data less than the length).
         let chunk_data: Vec<i32> = (0..10_i32).collect();
+        array_meta.chunk_grid.chunk_shape = smallvec![5, 2, 1];
         let chunk_in = crate::SliceDataChunk::new(smallvec![0, 0, 0], &chunk_data);
         create
             .write_chunk("foo/bar", &array_meta, &chunk_in)
