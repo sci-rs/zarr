@@ -124,15 +124,13 @@ pub(crate) fn test_varlength_chunk_rw(compression: compression::CompressionType)
     )
     .expect("write_chunk failed");
 
-    let chunk_out = <DefaultChunk as DefaultChunkReader<i32, _>>::read_chunk(
+    // In Zarr chunks must fill the chunk shape, so this should err.
+    assert!(<DefaultChunk as DefaultChunkReader<i32, _>>::read_chunk(
         &inner[..],
         &array_meta,
         smallvec![0, 0, 0],
     )
-    .expect("read_chunk failed");
-
-    assert_eq!(chunk_out.get_grid_position(), &[0, 0, 0]);
-    assert_eq!(chunk_out.get_data(), &chunk_data[..]);
+    .is_err());
 }
 
 pub(crate) fn create_backend<N: ZarrTestable>() {
@@ -331,12 +329,9 @@ pub(crate) fn create_chunk_rw<N: ZarrTestable>() {
     create
         .write_chunk("foo/bar", &array_meta, &chunk_in)
         .expect("Failed to write chunk");
-    let chunk_out = read
+    assert!(read
         .read_chunk::<i32>("foo/bar", &array_meta, smallvec![0, 0, 0])
-        .expect("Failed to read chunk")
-        .expect("Chunk is empty");
-
-    assert_eq!(chunk_out.get_data(), &chunk_data[..]);
+        .is_err());
 }
 
 pub(crate) fn delete_chunk<N: ZarrTestable>() {

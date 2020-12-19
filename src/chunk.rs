@@ -306,6 +306,7 @@ pub trait DefaultChunkWriter<T: ReflectedType, W: Write, B: DataChunk<T> + Write
     fn write_chunk(buffer: W, array_meta: &ArrayMetadata, chunk: &B) -> Result<()> {
         check_array_type::<T>(array_meta)?;
 
+        // TODO: should err if chunk is not fully sized.
         let mut compressor = array_meta.compressor.encoder(buffer);
         chunk.write_data(&mut compressor, array_meta)?;
 

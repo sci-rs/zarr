@@ -430,6 +430,10 @@ mod tests {
 
     #[test]
     pub(crate) fn short_chunk_truncation() {
+        // TODO: this test was created for N5 with varlength chunks, but is not
+        // ideal for Zarr. While shorter (bytewise) chunks being truncated
+        // correctly is important, this would happen in Zarr due to compression
+        // only, not variable chunk size.
         let wrapper = FilesystemHierarchy::temp_new_rw();
         let create = wrapper.as_ref();
         let array_meta = ArrayMetadata::new(
@@ -475,10 +479,9 @@ mod tests {
         let file = File::open(chunk_file.strip_prefix("file://").unwrap()).unwrap();
         let metadata = file.metadata().unwrap();
 
-        let header_len = 2 * std::mem::size_of::<u16>() + 4 * std::mem::size_of::<u32>();
         assert_eq!(
             metadata.len(),
-            (header_len + chunk_data.len() * std::mem::size_of::<i32>()) as u64
+            (chunk_data.len() * std::mem::size_of::<i32>()) as u64
         );
     }
 }
