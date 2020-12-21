@@ -3,4 +3,4 @@
 **/*.rs.bk
 Cargo.lock
 benches/*.tif
-tmp.zarr
+tmp.zr3
