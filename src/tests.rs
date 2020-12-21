@@ -11,6 +11,89 @@ use std::io::{
 
 use serde_json::json;
 
+#[cfg(feature = "gzip")]
+#[test]
+fn array_metadata_deserialization() {
+    use super::*;
+
+    let example_json = r#"
+        {
+            "shape": [10000, 1000],
+            "data_type": "<f8",
+            "chunk_grid": {
+                "type": "regular",
+                "chunk_shape": [1000, 100],
+                "separator" : "/"
+            },
+            "chunk_memory_layout": "C",
+            "compressor": {
+                "codec": "https://purl.org/zarr/spec/codec/gzip/1.0",
+                "configuration": {
+                    "level": 1
+                }
+            },
+            "fill_value": "NaN",
+            "extensions": [],
+            "attributes": {
+                "foo": 42,
+                "bar": "apples",
+                "baz": [1, 2, 3, 4]
+            }
+        }
+        "#;
+    let deserialized: ArrayMetadata = serde_json::from_str(example_json).unwrap();
+
+    let mut expected = ArrayMetadata {
+        shape: smallvec![10000, 1000],
+        data_type: ExtensibleDataType::Core(DataType::Float {
+            size: FloatSize::B8,
+            endian: Endian::Little,
+        }),
+        chunk_grid: ChunkGridMetadata {
+            grid_type: REGULAR_GRID_TYPE.into(),
+            chunk_shape: smallvec![1000, 100],
+            separator: "/".into(),
+        },
+        chunk_memory_layout: Order::RowMajor,
+        compressor: crate::compression::gzip::GzipCompression { level: 1 }.into(),
+        fill_value: Some(json!("NaN")),
+        extensions: vec![],
+        attributes: vec![
+            ("foo".into(), json!(42)),
+            ("bar".into(), json!("apples")),
+            ("baz".into(), json!([1, 2, 3, 4])),
+        ]
+        .into_iter()
+        .collect(),
+    };
+
+    assert_eq!(deserialized, expected);
+
+    let example_json = r#"
+        {
+            "shape": [10000, 1000],
+            "data_type": "<f8",
+            "chunk_grid": {
+                "type": "regular",
+                "chunk_shape": [1000, 100],
+                "separator" : "/"
+            },
+            "chunk_memory_layout": "C",
+            "fill_value": "NaN",
+            "extensions": [],
+            "attributes": {
+                "foo": 42,
+                "bar": "apples",
+                "baz": [1, 2, 3, 4]
+            }
+        }
+        "#;
+    let deserialized: ArrayMetadata = serde_json::from_str(example_json).unwrap();
+    expected.compressor = crate::compression::raw::RawCompression.into();
+
+    assert_eq!(deserialized, expected);
+}
+
 const DOC_SPEC_CHUNK_DATA: [i16; 6] = [1, 2, 3, 4, 5, 6];
 
 pub(crate) trait ZarrTestable: HierarchyReader + HierarchyWriter {

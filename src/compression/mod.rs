@@ -36,12 +36,13 @@ pub trait Compression: Default {
 /// Enumeration of known compression schemes.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(rename_all = "lowercase")]
-#[serde(tag = "type")]
+#[serde(tag = "codec", content = "configuration")]
 pub enum CompressionType {
     Raw(raw::RawCompression),
     #[cfg(feature = "bzip")]
     Bzip2(bzip::Bzip2Compression),
     #[cfg(feature = "gzip")]
+    #[serde(rename = "https://purl.org/zarr/spec/codec/gzip/1.0")]
     Gzip(gzip::GzipCompression),
     #[cfg(any(feature = "lz", feature = "lz_pure"))]
     Lz4(lz::Lz4Compression),
@@ -55,6 +56,10 @@ impl CompressionType {
         CompressionType: std::convert::From<T>,
     {
         T::default().into()
+    }
+
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
     }
 }
 

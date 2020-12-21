@@ -14,10 +14,9 @@ use serde::{
 use super::Compression;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
-#[serde(rename_all = "camelCase")]
 pub struct GzipCompression {
     #[serde(default = "default_gzip_level")]
-    level: i32,
+    pub level: i32,
 }
 
 impl GzipCompression {

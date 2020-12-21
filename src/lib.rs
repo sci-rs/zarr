@@ -358,6 +358,27 @@ impl Default for GroupMetadata {
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct ChunkGridMetadata {
+    /// TODO
+    #[serde(rename = "type")]
+    grid_type: String,
+    /// Shape of each chunk, in voxels.
+    chunk_shape: ChunkCoord,
+    /// TODO
+    separator: String,
+}
+
+const REGULAR_GRID_TYPE: &str = "regular";
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub enum Order {
+    #[serde(rename = "C")]
+    RowMajor,
+    #[serde(rename = "F")]
+    ColumnMajor,
+}
+
 /// Attributes of a tensor array.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ArrayMetadata {
@@ -376,23 +397,9 @@ pub struct ArrayMetadata {
     /// TODO
     attributes: JsonObject,
     /// Compression scheme for voxel data in each chunk.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "compression::CompressionType::is_default")]
     compressor: compression::CompressionType,
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub struct ChunkGridMetadata {
-    /// Shape of each chunk, in voxels.
-    chunk_shape: ChunkCoord,
-    /// TODO
-    separator: String,
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub enum Order {
-    #[serde(rename = "C")]
-    RowMajor,
-    #[serde(rename = "F")]
-    ColumnMajor,
 }
 
 impl ArrayMetadata {
@@ -411,6 +418,7 @@ impl ArrayMetadata {
             shape,
             data_type: data_type.into(),
             chunk_grid: ChunkGridMetadata {
+                grid_type: REGULAR_GRID_TYPE.to_owned(),
                 chunk_shape,
                 separator: "/".to_owned(),
             },
