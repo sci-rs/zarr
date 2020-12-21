@@ -16,7 +16,7 @@ pub use crate::compression::{
 };
 #[cfg(feature = "filesystem")]
 #[doc(no_inline)]
-pub use crate::filesystem::FilesystemHierarchy;
+pub use crate::store::filesystem::FilesystemHierarchy;
 #[doc(no_inline)]
 pub use crate::{
     chunk::{

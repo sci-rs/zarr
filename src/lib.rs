@@ -35,12 +35,11 @@ pub mod compression;
 #[macro_use]
 pub mod data_type;
 pub use data_type::*;
-#[cfg(feature = "filesystem")]
-pub mod filesystem;
 #[cfg(feature = "use_ndarray")]
 pub mod ndarray;
 pub mod prelude;
 pub mod storage;
+pub mod store;
 
 #[cfg(test)]
 #[macro_use]
