@@ -392,20 +392,22 @@ impl ArrayMetadata {
 
     pub fn bounded_coord_iter(
         &self,
-        bbox: &BoundingBox,
+        unbounded_bbox: &BoundingBox,
     ) -> impl Iterator<Item = Vec<u64>> + ExactSizeIterator {
+        let mut bbox = self.get_bounds();
+        bbox.intersect(unbounded_bbox);
         let floor_coord: GridCoord = bbox
             .offset
             .iter()
             .zip(&self.chunk_grid.chunk_shape)
-            .map(|(&o, &bs)| o / u64::from(bs))
+            .map(|(&o, &cs)| o / u64::from(cs))
             .collect();
         let ceil_coord: GridCoord = bbox
             .offset
             .iter()
             .zip(&bbox.shape)
             .zip(self.chunk_grid.chunk_shape.iter().cloned().map(u64::from))
-            .map(|((&o, &s), bs)| (o + s + bs - 1) / bs)
+            .map(|((&o, &s), cs)| (o + s + cs - 1) / cs)
             .collect();
 
         CoordIterator::floor_ceil(&floor_coord, &ceil_coord)
