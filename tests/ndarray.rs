@@ -118,7 +118,9 @@ fn test_read_ndarray_oob() {
     n.create_array(path_name, &array_meta)
         .expect("Failed to create array");
 
-    let chunk_in = VecDataChunk::new(smallvec![1, 1], vec![1]);
+    let mut chunk_data = vec![0; 5000];
+    chunk_data[0] = 1;
+    let chunk_in = VecDataChunk::new(smallvec![1, 1], chunk_data);
     n.write_chunk(path_name, &array_meta, &chunk_in)
         .expect("Failed to write chunk");
 
