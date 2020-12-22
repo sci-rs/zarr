@@ -1,3 +1,4 @@
+use half::f16;
 use rand::{
     distributions::Standard,
     Rng,
@@ -6,13 +7,13 @@ use smallvec::smallvec;
 
 use zarr::prelude::*;
 
-fn test_read_write<T, Zarr: HierarchyReader + HierarchyWriter>(
+fn test_read_write<T, RT: Into<T>, Zarr: HierarchyReader + HierarchyWriter>(
     n: &Zarr,
     compression: &CompressionType,
     dim: usize,
 ) where
     T: 'static + std::fmt::Debug + ReflectedType + PartialEq + Default,
-    rand::distributions::Standard: rand::distributions::Distribution<T>,
+    rand::distributions::Standard: rand::distributions::Distribution<RT>,
     VecDataChunk<T>: zarr::chunk::ReadableDataChunk + zarr::chunk::WriteableDataChunk,
 {
     let chunk_shape: ChunkCoord = (1..=dim as u32).rev().map(|d| d * 5).collect();
@@ -24,7 +25,11 @@ fn test_read_write<T, Zarr: HierarchyReader + HierarchyWriter>(
     );
     let numel = array_meta.get_chunk_num_elements();
     let rng = rand::thread_rng();
-    let chunk_data: Vec<T> = rng.sample_iter(&Standard).take(numel).collect();
+    let chunk_data: Vec<T> = rng
+        .sample_iter(&Standard)
+        .take(numel)
+        .map(Into::into)
+        .collect();
 
     let chunk_in = SliceDataChunk::new(smallvec![0; dim], chunk_data);
 
@@ -57,17 +62,18 @@ fn test_all_types<Zarr: HierarchyReader + HierarchyWriter>(
     compression: &CompressionType,
     dim: usize,
 ) {
-    test_read_write::<bool, _>(n, compression, dim);
-    test_read_write::<u8, _>(n, compression, dim);
-    test_read_write::<u16, _>(n, compression, dim);
-    test_read_write::<u32, _>(n, compression, dim);
-    test_read_write::<u64, _>(n, compression, dim);
-    test_read_write::<i8, _>(n, compression, dim);
-    test_read_write::<i16, _>(n, compression, dim);
-    test_read_write::<i32, _>(n, compression, dim);
-    test_read_write::<i64, _>(n, compression, dim);
-    test_read_write::<f32, _>(n, compression, dim);
-    test_read_write::<f64, _>(n, compression, dim);
+    test_read_write::<bool, bool, _>(n, compression, dim);
+    test_read_write::<u8, u8, _>(n, compression, dim);
+    test_read_write::<u16, u16, _>(n, compression, dim);
+    test_read_write::<u32, u32, _>(n, compression, dim);
+    test_read_write::<u64, u64, _>(n, compression, dim);
+    test_read_write::<i8, i8, _>(n, compression, dim);
+    test_read_write::<i16, i16, _>(n, compression, dim);
+    test_read_write::<i32, i32, _>(n, compression, dim);
+    test_read_write::<i64, i64, _>(n, compression, dim);
+    test_read_write::<f16, u8, _>(n, compression, dim);
+    test_read_write::<f32, f32, _>(n, compression, dim);
+    test_read_write::<f64, f64, _>(n, compression, dim);
 }
 
 fn test_zarr_filesystem_dim(dim: usize) {
