@@ -340,15 +340,8 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                     }
                     None => {
                         // If no chunk exists, need to write from its origin.
-                        let mut chunk_bb = write_bb.clone();
-                        chunk_bb
-                            .shape
-                            .iter_mut()
-                            .zip(write_bb.offset.iter())
-                            .zip(nom_chunk_bb.offset.iter())
-                            .for_each(|((s, o), g)| *s += *o - *g);
-                        chunk_bb.offset = nom_chunk_bb.offset.clone();
-                        let chunk_shape_usize = chunk_bb.shape_ndarray_shape();
+                        // In Zarr this simply means the chunk must be full.
+                        let chunk_shape_usize = nom_chunk_bb.shape_ndarray_shape();
                         existing_chunk_vec = existing_chunk.into_data();
                         existing_chunk_vec.clear();
                         existing_chunk_vec
@@ -357,7 +350,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                         let chunk_array =
                             Array::from_shape_vec(&chunk_shape_usize[..], existing_chunk_vec)
                                 .expect("TODO: chunk ndarray failed");
-                        (chunk_bb, chunk_array)
+                        (nom_chunk_bb, chunk_array)
                     }
                 };
 
