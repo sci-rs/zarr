@@ -491,7 +491,7 @@ impl CoordIterator<itertools::MultiProduct<std::ops::Range<u64>>> {
         let total_coords = floor
             .iter()
             .zip(ceil.iter())
-            .map(|(&f, &c)| c.checked_sub(f).unwrap_or(0))
+            .map(|(&f, &c)| c.saturating_sub(f))
             .product::<u64>() as usize;
         CoordIterator {
             iter: floor
