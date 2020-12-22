@@ -57,6 +57,7 @@ fn test_all_types<Zarr: HierarchyReader + HierarchyWriter>(
     compression: &CompressionType,
     dim: usize,
 ) {
+    test_read_write::<bool, _>(n, compression, dim);
     test_read_write::<u8, _>(n, compression, dim);
     test_read_write::<u16, _>(n, compression, dim);
     test_read_write::<u32, _>(n, compression, dim);
