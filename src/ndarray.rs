@@ -1,4 +1,3 @@
-use std::cmp;
 use std::io::{
     Error,
     ErrorKind,
@@ -421,18 +420,15 @@ impl ArrayMetadata {
     }
 
     pub fn get_chunk_bounds(&self, coord: &[u64]) -> BoundingBox {
-        let mut shape: GridCoord = self
+        let shape: GridCoord = self
             .get_chunk_shape()
             .iter()
             .cloned()
             .map(u64::from)
             .collect();
         let offset: GridCoord = coord.iter().zip(shape.iter()).map(|(c, s)| c * s).collect();
-        shape
-            .iter_mut()
-            .zip(offset.iter())
-            .zip(self.get_shape().iter())
-            .for_each(|((s, o), d)| *s = cmp::min(*s + *o, *d) - *o);
+        // In Zarr there is no need to trim the chunk bounds to be inside the
+        // array bounds, as boundary chunks may overhang.
         BoundingBox { offset, shape }
     }
 }
