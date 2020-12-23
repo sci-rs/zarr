@@ -302,6 +302,18 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
         let mut chunk_vec: Vec<T> = Vec::new();
         let mut existing_chunk_vec: Vec<T> = Vec::new();
 
+        let extend_from_array =
+            |v: &mut Vec<T>, view: ArrayView<T, IxDyn>, array_meta: &ArrayMetadata| {
+                match array_meta.chunk_memory_layout {
+                    Order::RowMajor => match view.as_slice() {
+                        Some(s) => v.extend_from_slice(s),
+                        None => v.extend(view.iter().cloned()),
+                    },
+                    // TODO: could check if array is F-ordered and use `extend_from_slice`.
+                    Order::ColumnMajor => v.extend(view.t().iter().cloned()),
+                }
+            };
+
         for coord in array_meta.bounded_coord_iter(&bbox) {
             let grid_coord = GridCoord::from(&coord[..]);
             let nom_chunk_bb = array_meta.get_chunk_bounds(&grid_coord);
@@ -316,8 +328,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                 // No need to read whether there is an extant chunk if it is
                 // going to be entirely overwriten.
                 chunk_vec.clear();
-                // TODO: need to adjust `t` based on array ordering?
-                chunk_vec.extend(arr_view.t().iter().cloned());
+                extend_from_array(&mut chunk_vec, arr_view, array_meta);
                 let chunk = VecDataChunk::new(coord.into(), chunk_vec);
 
                 self.write_chunk(path_name, array_meta, &chunk)?;
@@ -361,8 +372,7 @@ pub trait ZarrNdarrayWriter: HierarchyWriter {
                 chunk_view.assign(&arr_view);
 
                 chunk_vec.clear();
-                // TODO: need to adjust `t` based on array ordering?
-                chunk_vec.extend(chunk_array.t().iter().cloned());
+                extend_from_array(&mut chunk_vec, chunk_array.view(), array_meta);
                 let chunk = VecDataChunk::new(coord.into(), chunk_vec);
 
                 self.write_chunk(path_name, array_meta, &chunk)?;
