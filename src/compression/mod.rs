@@ -12,7 +12,7 @@ use serde::{
 
 #[cfg(feature = "bzip")]
 pub mod bzip;
-#[cfg(feature = "gzip")]
+#[cfg(any(feature = "gzip", feature = "gzip_pure"))]
 pub mod gzip;
 #[cfg(feature = "lz")]
 pub mod lz;
@@ -41,7 +41,7 @@ pub enum CompressionType {
     Raw(raw::RawCompression),
     #[cfg(feature = "bzip")]
     Bzip2(bzip::Bzip2Compression),
-    #[cfg(feature = "gzip")]
+    #[cfg(any(feature = "gzip", feature = "gzip_pure"))]
     #[serde(rename = "https://purl.org/zarr/spec/codec/gzip/1.0")]
     Gzip(gzip::GzipCompression),
     #[cfg(any(feature = "lz", feature = "lz_pure"))]
@@ -77,7 +77,7 @@ impl Compression for CompressionType {
             #[cfg(feature = "bzip")]
             CompressionType::Bzip2(ref c) => c.decoder(r),
 
-            #[cfg(feature = "gzip")]
+            #[cfg(any(feature = "gzip", feature = "gzip_pure"))]
             CompressionType::Gzip(ref c) => c.decoder(r),
 
             #[cfg(feature = "xz")]
@@ -95,7 +95,7 @@ impl Compression for CompressionType {
             #[cfg(feature = "bzip")]
             CompressionType::Bzip2(ref c) => c.encoder(w),
 
-            #[cfg(feature = "gzip")]
+            #[cfg(any(feature = "gzip", feature = "gzip_pure"))]
             CompressionType::Gzip(ref c) => c.encoder(w),
 
             #[cfg(feature = "xz")]
@@ -118,7 +118,7 @@ impl std::fmt::Display for CompressionType {
                 #[cfg(feature = "bzip")]
                 CompressionType::Bzip2(_) => "Bzip2",
 
-                #[cfg(feature = "gzip")]
+                #[cfg(any(feature = "gzip", feature = "gzip_pure"))]
                 CompressionType::Gzip(_) => "Gzip",
 
                 #[cfg(feature = "xz")]
@@ -141,7 +141,7 @@ impl std::str::FromStr for CompressionType {
             #[cfg(feature = "bzip")]
             "bzip2" => Ok(Self::new::<bzip::Bzip2Compression>()),
 
-            #[cfg(feature = "gzip")]
+            #[cfg(any(feature = "gzip", feature = "gzip_pure"))]
             "gzip" => Ok(Self::new::<gzip::GzipCompression>()),
 
             #[cfg(feature = "xz")]
@@ -168,7 +168,7 @@ macro_rules! compression_from_impl {
 compression_from_impl!(Raw, raw::RawCompression);
 #[cfg(feature = "bzip")]
 compression_from_impl!(Bzip2, bzip::Bzip2Compression);
-#[cfg(feature = "gzip")]
+#[cfg(any(feature = "gzip", feature = "gzip_pure"))]
 compression_from_impl!(Gzip, gzip::GzipCompression);
 #[cfg(feature = "xz")]
 compression_from_impl!(Xz, xz::XzCompression);
