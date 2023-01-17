@@ -1,7 +1,7 @@
 //! TODO.
 
 #![deny(missing_debug_implementations)]
-#![forbid(unsafe_code)]
+#![cfg_attr(not(feature = "blosc"), forbid(unsafe_code))]
 
 #[cfg(all(doctest, feature = "filesystem"))]
 doc_comment::doctest!("../README.md");

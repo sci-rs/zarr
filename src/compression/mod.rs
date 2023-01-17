@@ -10,6 +10,8 @@ use serde::{
     Serialize,
 };
 
+#[cfg(feature = "blosc")]
+pub mod blosc;
 #[cfg(feature = "bzip")]
 pub mod bzip;
 #[cfg(any(feature = "gzip", feature = "gzip_pure"))]
@@ -39,6 +41,8 @@ pub trait Compression: Default {
 #[serde(tag = "codec", content = "configuration")]
 pub enum CompressionType {
     Raw(raw::RawCompression),
+    #[cfg(feature = "blosc")]
+    Blosc(blosc::BloscCompression),
     #[cfg(feature = "bzip")]
     Bzip2(bzip::Bzip2Compression),
     #[cfg(any(feature = "gzip", feature = "gzip_pure"))]
@@ -74,6 +78,9 @@ impl Compression for CompressionType {
         match *self {
             CompressionType::Raw(ref c) => c.decoder(r),
 
+            #[cfg(feature = "blosc")]
+            CompressionType::Blosc(ref c) => c.decoder(r),
+
             #[cfg(feature = "bzip")]
             CompressionType::Bzip2(ref c) => c.decoder(r),
 
@@ -91,6 +98,9 @@ impl Compression for CompressionType {
     fn encoder<'a, W: Write + 'a>(&self, w: W) -> Box<dyn Write + 'a> {
         match *self {
             CompressionType::Raw(ref c) => c.encoder(w),
+
+            #[cfg(feature = "blosc")]
+            CompressionType::Blosc(ref c) => c.encoder(w),
 
             #[cfg(feature = "bzip")]
             CompressionType::Bzip2(ref c) => c.encoder(w),
@@ -114,6 +124,9 @@ impl std::fmt::Display for CompressionType {
             "{}",
             match *self {
                 CompressionType::Raw(_) => "Raw",
+
+                #[cfg(feature = "blosc")]
+                CompressionType::Blosc(_) => "Blosc",
 
                 #[cfg(feature = "bzip")]
                 CompressionType::Bzip2(_) => "Bzip2",
